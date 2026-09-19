@@ -1,0 +1,28 @@
+# Project data and generated bundles
+/Bundle/
+/Docker/
+
+# Generated output
+submission.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local configuration
+.env
+.env.*
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+*.swp
