@@ -4,6 +4,10 @@
 
 # Generated output
 submission.json
+evidence.json
+review_decisions.json
+dashboard.*.log
+.uv-cache/
 
 # Python
 __pycache__/

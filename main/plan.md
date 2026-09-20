@@ -1,38 +1,27 @@
-# Shipping Document Verification Implementation Plan
+# Shipping Document Verification: Implementation Status
 
-## Problem and approach
+## Working prototype
 
-The repository has starter modules for email classification, document extraction, comparison, and human escalation, but they are currently placeholders. The use case requires processing every inbox email, classifying it, comparing SI and BL documents for comparison requests, and producing the `sample_submission.json` shape with explicit mismatch details and review cases.
+The application has three layers:
 
-Implement a small, testable pipeline using the existing `Bundle.loader.Inbox` interface:
+1. **AI understanding:** `ai_service.py` uses Gemini, when `GEMINI_API_KEY` is configured, for uncertain email intent, ambiguous SI/BL roles, unfamiliar field labels, and image-only PDF transcription. It validates categories, attachment paths, and quoted field evidence before accepting model output. Native extraction remains the first path.
+2. **Deterministic verification:** `extractor.py`, `comparator.py`, and `main.py` read TXT/XLSX/DOCX/PDF, normalize the seven required fields, check document consistency and shipment identifiers, compare SI against BL, and produce the exact competition submission schema. Low-confidence extraction goes to review.
+3. **Web and cloud application:** `dashboard.py` serves the inbox, case detail, attachment preview, comparison, human review, and analytics views. `repository.py` supports local files and Google Cloud Firestore/Cloud Storage. The root `Dockerfile` packages the app for Cloud Run. `seed_cloud.py` uploads a participant bundle and processed cases.
 
-1. Load each email and its attachments.
-2. Classify messages into the dataset's expected categories, using message content and attachment names rather than subject alone.
-3. Extract the seven required fields from plain-text documents first, with normalized labels and values.
-4. Compare SI as the source of truth against BL, preserving both values for every mismatch.
-5. Escalate missing, unreadable, or ambiguous data to human review instead of inventing values.
-6. Write a complete submission for every email and validate its schema locally.
+## User workflow
 
-The advanced PDF/DOCX/OCR support should be treated as a second stage after the plain-text pipeline is reliable. The current `main.py` also needs its import-path setup moved before local-module imports so direct execution remains reliable.
+The inbox shows sender, subject, classification and confidence, attachment count, and result. Selecting a case opens the email body, document roles and previews, all seven raw and normalized values, match status, evidence, and reviewer actions. Reviewers can correct a field, mark two values equivalent, select SI and BL documents, retry extraction, confirm a mismatch, resolve a case, and draft a correction email after confirming a mismatch. Drafts are never sent automatically.
 
-## Todos
+The analytics view shows processing totals, category and status distributions, review volume, and automation rate. No unsupported savings claims are shown.
 
-- Inspecting dataset schema and category conventions
-- Implementing robust email classification
-- Implementing normalized SI and BL field extraction
-- Implementing field-by-field comparison and mismatch reporting
-- Implementing explicit human-review cases
-- Wiring the end-to-end submission pipeline
-- Adding focused tests and schema validation
-- Evaluating output against the local scoring endpoint
-- Adding optional PDF, DOCX, and OCR extraction support
+## Deployment still requiring project access
 
-## Notes and considerations
+The local app is running. Deployment to Cloud Run and seeding Firestore/Cloud Storage require a Google Cloud project, billing and IAM access, an existing bucket and Firestore database, and optional Gemini API access. Deployment instructions are in the root `README.md`. The cloud service should remain authenticated until access for judges is configured.
 
-- Required comparison fields: shipper, consignee, notify party, port of loading, port of discharge, container count, and gross weight in kilograms.
-- Equivalent labels such as `Load Port` and `Port of Loading` must map to the same canonical field.
-- Numeric comparison should normalize commas, units, and harmless formatting differences; text comparison should normalize whitespace and case without hiding meaningful differences.
-- Every inbox email must appear in the output, including non-comparison categories.
-- A comparison result should use `status: MISMATCH` only when a dependable difference is found; complete matches should use `status: OK` with no defect fields.
-- Missing attachments, missing required fields, unreadable files, and low-confidence parsing should produce a review reason and source context.
-- Keep generated `submission.json`, local data bundles, and caches out of version control via `.gitignore`.
+## Verification and current limits
+
+- Local tests cover classification, file formats, role identification, extraction, normalization, internal validation, comparison, AI response validation, and submission shape.
+- The local scorer evaluates the complete bundle. Its main score measures the competition output and does not test Gemini or cloud connectivity.
+- Gemini behavior needs a configured API key and a live integration check. Without a key the system remains deterministic.
+- AI-transcribed PDFs are sent to review because image-derived text has lower trust. Damaged PDFs with no usable transcription are marked unreadable.
+- Firestore and Cloud Storage integration is implemented but cannot be exercised until project credentials are available.

@@ -1,0 +1,12 @@
+.git
+.venv
+.uv-cache
+Bundle
+Docker
+*.log
+*.json
+__pycache__
+*.pyc
+review_decisions.json
+evidence.json
+submission.json

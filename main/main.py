@@ -1,32 +1,151 @@
+"""Run document verification over a Bundle.loader.Inbox."""
+
+import argparse
 import json
+import logging
+import re
 import sys
 from pathlib import Path
 
-from classify import Classify
-from extractor import Extractor
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
-from Bundle.loader import Inbox
+from inbox import Inbox
+from ai_service import AIService
+from classify import classify_email
+from comparator import compare_documents
+from extractor import (extract_fields, identify_documents, read_document,
+                       validate_document_consistency, validate_document_pair)
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+LOG = logging.getLogger(__name__)
+
+
+def _submission_record(category, status="OK", fields=(), reason=None):
+    return {"category": category, "status": status, "review_reason": reason,
+            "has_defect": status == "MISMATCH", "defect_fields": list(fields)}
+
+
+def build_evidence_report(case):
+    """Compact report for a reviewer; independent of the competition schema."""
+    return {key: case.get(key) for key in
+            ("email_id", "email", "category", "classification", "status", "review_reason",
+             "internal_reason", "documents", "other_attachments", "document_identification",
+             "si_fields", "bl_fields", "mismatches", "missing_fields", "uncertain_fields",
+             "validation", "error") if key in case}
+
+
+def process_email(email, inbox, role_override=None):
+    eid = email["email_id"]
+    ai = AIService()
+    classification = classify_email(email)
+    if ai.enabled and classification["confidence"] < .8:
+        suggestion = ai.classify_email(email)
+        if suggestion and suggestion["confidence"] >= .85:
+            classification = suggestion
+    category = classification["category"]
+    case = {"email_id": eid, "category": category, "classification": classification,
+            "email": {key: email.get(key) for key in ("from", "to", "subject", "body", "attachments")}}
+    if category != "BL_COMPARISON":
+        case["status"] = "OK"
+        return _submission_record(category), case
+    paths = email.get("attachments", [])
+    if not paths:
+        case.update(status="NEEDS_REVIEW", review_reason="missing_attachment",
+                    internal_reason="MISSING_SI_AND_BL")
+        return _submission_record(category, "NEEDS_REVIEW", reason="missing_attachment"), case
+    try:
+        documents = [read_document(path, inbox, ai) for path in paths]
+        pair = identify_documents(email, documents)
+        clearly_other = any(re.match(r"\s*(?:commercial invoice|packing list|certificate of origin)\b",
+                                     d["text"], re.I) for d in documents)
+        if pair["reason"] == "wrong_doc_type" and ai.enabled and not clearly_other:
+            suggestion = ai.identify_documents(email, documents)
+            if suggestion and suggestion["confidence"] >= .9:
+                pair = {"si": suggestion["si"], "bl": suggestion["bl"], "reason": None,
+                        "other": [d for d in documents if d not in (suggestion["si"], suggestion["bl"])],
+                        "method": "gemini_role_detection", "confidence": suggestion["confidence"]}
+        if role_override:
+            paths_by_role = {role: role_override.get(role) for role in ("si", "bl")}
+            by_path = {d["path"]: d for d in documents}
+            for role, path in paths_by_role.items():
+                if path is not None:
+                    if path not in by_path:
+                        raise ValueError("Selected document is not attached to this email")
+                    pair[role] = by_path[path]
+            if pair.get("si") and pair.get("bl") and pair["si"] is not pair["bl"]:
+                pair.update(reason=None, method="reviewer_document_selection", confidence=1,
+                            other=[d for d in documents if d is not pair["si"] and d is not pair["bl"]])
+        case["documents"] = {role: pair[role]["path"] if pair.get(role) else None for role in ("si", "bl")}
+        case["other_attachments"] = [d["path"] for d in pair.get("other", [])]
+        case["document_identification"] = {"method": pair.get("method", "rules"),
+                                           "confidence": pair.get("confidence", 1 if not pair["reason"] else 0)}
+        if pair["reason"]:
+            case.update(status="NEEDS_REVIEW", review_reason=pair["reason"],
+                        internal_reason="AMBIGUOUS_DOCUMENT_ROLE" if pair["reason"] == "wrong_doc_type" else "MISSING_SI_OR_BL")
+            return _submission_record(category, "NEEDS_REVIEW", reason=pair["reason"]), case
+        si, bl = pair["si"], pair["bl"]
+        si_fields, bl_fields = extract_fields(si, ai), extract_fields(bl, ai)
+        case.update(si_fields=si_fields, bl_fields=bl_fields)
+        consistency = {"si": validate_document_consistency(si, si_fields),
+                       "bl": validate_document_consistency(bl, bl_fields)}
+        pairing = validate_document_pair(si, bl)
+        case["validation"] = {"consistency": consistency, "pairing": pairing}
+        if not pairing["valid"] or not all(c["valid"] for c in consistency.values()):
+            case.update(status="NEEDS_REVIEW", review_reason="wrong_doc_type",
+                        internal_reason="POSSIBLE_WRONG_DOCUMENT_PAIR" if not pairing["valid"] else "DOCUMENT_INTERNAL_INCONSISTENCY")
+            return _submission_record(category, "NEEDS_REVIEW", reason="wrong_doc_type"), case
+        uncertain = [field for field in set(si_fields) | set(bl_fields)
+                     if si_fields.get(field, {}).get("confidence", 0) < .9 or
+                     bl_fields.get(field, {}).get("confidence", 0) < .9]
+        if uncertain:
+            case.update(status="NEEDS_REVIEW", review_reason="missing_value",
+                        internal_reason="LOW_EXTRACTION_CONFIDENCE", uncertain_fields=uncertain)
+            return _submission_record(category, "NEEDS_REVIEW", reason="missing_value"), case
+        comparison = compare_documents(si_fields, bl_fields)
+        case["mismatches"] = comparison["mismatches"]
+        if comparison["missing_fields"]:
+            case.update(status="NEEDS_REVIEW", review_reason="missing_value",
+                        missing_fields=comparison["missing_fields"], internal_reason="MISSING_REQUIRED_FIELD")
+            return _submission_record(category, "NEEDS_REVIEW", reason="missing_value"), case
+        fields = [m["field"] for m in comparison["mismatches"]]
+        status = "MISMATCH" if fields else "OK"
+        case["status"] = status
+        return _submission_record(category, status, fields), case
+    except Exception as exc:
+        LOG.warning("Could not process %s: %s", eid, exc)
+        case.update(status="NEEDS_REVIEW", review_reason="unreadable", error=str(exc),
+                    internal_reason="UNREADABLE_DOCUMENT")
+        return _submission_record(category, "NEEDS_REVIEW", reason="unreadable"), case
+
+
+def generate_submission(inbox, *, evidence_path=None):
+    submission, evidence = {}, {}
+    for email in inbox:
+        record, case = process_email(email, inbox)
+        submission[email["email_id"]] = record
+        evidence[email["email_id"]] = build_evidence_report(case)
+    if evidence_path:
+        Path(evidence_path).write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+    return submission
+
 
 def run():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", default=str(ROOT / "Bundle"))
+    parser.add_argument("--output", default=str(ROOT / "submission.json"))
+    parser.add_argument("--evidence", default=str(ROOT / "evidence.json"))
+    args = parser.parse_args()
+    inbox = Inbox(args.source)
+    submission = generate_submission(inbox, evidence_path=args.evidence)
+    expected = set(inbox.sample_submission())
+    if set(submission) != expected:
+        raise ValueError(f"Submission IDs differ from sample: {len(submission)} vs {len(expected)}")
+    Path(args.output).write_text(json.dumps(submission, indent=2), encoding="utf-8")
+    from collections import Counter
+    print(f"Wrote {len(submission)} records to {args.output}")
+    print("Categories:", dict(Counter(r["category"] for r in submission.values())))
+    print("Statuses:", dict(Counter(r["status"] for r in submission.values())))
 
-    inbox = Inbox("Bundle")                     # this folder  (or a server URL)
-    submission = {}
-    for email in inbox:
-        eid = email["email_id"]
-        # ... your classify + extract + compare pipeline ...
-        submission[eid] = {
-            "category": "BL_COMPARISON",
-            "status": "MISMATCH",
-            "review_reason": None,
-            "has_defect": True,
-            "defect_fields": ["consignee"],
-        }
-
-
-    with open("submission.json", "w") as file:
-        json.dump(submission, file, indent=2)
 
 if __name__ == "__main__":
     run()
