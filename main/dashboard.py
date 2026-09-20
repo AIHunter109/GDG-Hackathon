@@ -149,6 +149,13 @@ class Handler(BaseHTTPRequestHandler):
                     ),
                     "text/html",
                 )
+            if parts in (["style.css"], ["dashboard.js"]):
+                asset = Path(__file__).parent / "dashboard" / parts[0]
+                return self._send(
+                    200,
+                    asset.read_text(encoding="utf-8"),
+                    "text/css" if asset.suffix == ".css" else "text/javascript",
+                )
             if parts == ["healthz"]:
                 return self._send(200, {"ok": True})
             if parts == ["api", "cases"]:
