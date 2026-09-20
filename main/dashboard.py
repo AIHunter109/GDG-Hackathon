@@ -144,7 +144,7 @@ class Handler(BaseHTTPRequestHandler):
             if parts == [""]:
                 return self._send(
                     200,
-                    (Path(__file__).parent / "dashboard.html").read_text(
+                    (Path(__file__).parent / "dashboard/dashboard.html").read_text(
                         encoding="utf-8"
                     ),
                     "text/html",
