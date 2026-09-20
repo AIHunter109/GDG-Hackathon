@@ -2,12 +2,18 @@
 
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from inbox import Inbox
 from call_for_help import RaiseIssueToHuman
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _stamp(case):
+    case["updated_at"] = datetime.now(timezone.utc).isoformat()
+    return case
 
 
 def _read_json(path, default=None):
@@ -42,10 +48,15 @@ class LocalRepository:
     def save_case(self, email_id, case, submission):
         cases = self.list_cases()
         records = _read_json(self.submission_path)
-        cases[email_id] = case
+        cases[email_id] = _stamp(case)
         records[email_id] = submission
         self.evidence_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
         self.submission_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
+
+    def save_processing(self, email_id, case, step="Retrying document verification"):
+        cases = self.list_cases()
+        cases[email_id] = _stamp({**case, "status": "PROCESSING", "processing_step": step})
+        self.evidence_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
 
 
 class CloudRepository:
@@ -103,7 +114,11 @@ class CloudRepository:
         return decision
 
     def save_case(self, email_id, case, submission):
-        self.collection.document(email_id).set({"case": case, "submission": submission}, merge=True)
+        self.collection.document(email_id).set({"case": _stamp(case), "submission": submission}, merge=True)
+
+    def save_processing(self, email_id, case, step="Retrying document verification"):
+        processing = _stamp({**case, "status": "PROCESSING", "processing_step": step})
+        self.collection.document(email_id).set({"case": processing}, merge=True)
 
 
 def get_repository():

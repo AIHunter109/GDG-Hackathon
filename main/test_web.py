@@ -48,6 +48,10 @@ class MemoryRepository:
         self.case = case
         self.submission = submission
 
+    def save_processing(self, email_id, case, step="Retrying document verification"):
+        self.processing_seen = True
+        self.case = {**case, "status": "PROCESSING", "processing_step": step}
+
     def save_decision(self, email_id, action, note="", corrections=None):
         self.decision[email_id] = {"action": action, "note": note, "corrections": corrections or {}}
         return self.decision[email_id]
@@ -77,6 +81,48 @@ class WebWorkflowTests(unittest.TestCase):
                 result = json.load(response)
             self.assertEqual(result["case"]["status"], "OK")
             self.assertEqual(Handler.repository.submission["defect_fields"], [])
+        finally:
+            server.shutdown()
+            server.server_close()
+            Handler.repository = previous
+
+    def test_confirm_value_endpoint_recompares(self):
+        previous = Handler.repository
+        Handler.repository = MemoryRepository()
+        Handler.repository.case["bl_fields"]["gross_weight_kg"]["confidence"] = .7
+        Handler.repository.case["status"] = "NEEDS_REVIEW"
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            payload = json.dumps({"action": "confirm_value", "role": "bl",
+                                  "field": "gross_weight_kg"}).encode()
+            request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/api/decision/email_demo",
+                                             payload, {"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(request) as response:
+                result = json.load(response)
+            self.assertEqual(result["case"]["status"], "MISMATCH")
+            self.assertEqual(result["case"]["bl_fields"]["gross_weight_kg"]["confidence"], 1)
+            self.assertEqual(Handler.repository.decision["email_demo"]["corrections"]["field"], "gross_weight_kg")
+        finally:
+            server.shutdown()
+            server.server_close()
+            Handler.repository = previous
+
+    def test_retry_shows_processing_before_final_result(self):
+        previous = Handler.repository
+        Handler.repository = MemoryRepository()
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/api/retry/email_demo",
+                                             b"{}", {"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(request) as response:
+                result = json.load(response)
+            self.assertTrue(Handler.repository.processing_seen)
+            self.assertEqual(result["case"]["status"], "MISMATCH")
+            self.assertEqual(Handler.repository.submission["status"], "MISMATCH")
         finally:
             server.shutdown()
             server.server_close()

@@ -1,6 +1,7 @@
 """Read shipping documents and extract evidence-backed fields."""
 
 import io
+import logging
 import re
 import unicodedata
 import zipfile
@@ -67,7 +68,7 @@ def _docx_text(data):
     return "\n".join(lines)
 
 
-def read_document(document, inbox=None, ai_service=None):
+def read_document(document, inbox=None, ai_service=None, *, force_vision=False):
     """Return document text and metadata. `document` is an attachment path or dict."""
     path = document["path"] if isinstance(document, dict) else str(document)
     data = inbox.read_bytes(path) if inbox else Path(path).read_bytes()
@@ -89,9 +90,10 @@ def read_document(document, inbox=None, ai_service=None):
             text = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(data)).pages)
         except Exception:
             text = ""
-        if not text.strip() and ai_service and ai_service.enabled and len(data) <= 15_000_000:
+        if (force_vision or not text.strip()) and ai_service and ai_service.enabled and len(data) <= 15_000_000:
             transcription = ai_service.transcribe_pdf(data)
             if transcription and transcription["text"].strip():
+                logging.getLogger(__name__).info("AI vision extracted PDF %s", path)
                 return {"path": path, "text": transcription["text"], "file_type": suffix,
                         "method": "gemini_pdf_vision", "confidence": min(transcription["confidence"], .8)}
     else:
@@ -205,25 +207,32 @@ def extract_fields(document, ai_service=None):
                                  "source": document["path"], "source_text": source,
                                  "confidence": min(confidence * .95, document.get("confidence", 1)),
                                  "method": "gemini_semantic_mapping"}
+                logging.getLogger(__name__).info("AI mapped %s in %s", field, document["path"])
     return result
 
 
 def _identifiers(document):
     result = {}
-    patterns = {"booking": r"(?:booking (?:ref|no\.?|number))\s*:\s*(\S+)",
+    patterns = {"booking": r"(?:booking (?:ref(?:erence)?|no\.?|number))\s*:\s*(\S+)",
                 "oc": r"oc no\.?\s*:\s*(\S+)",
-                "bl": r"(?:bill of lading no\.?|b/?l number)\s*:\s*(\S+)"}
+                "bl": r"(?:bill of lading no\.?|b/?l (?:no\.?|number))\s*:\s*(\S+)",
+                "vessel": r"^vessel(?: name)?\s*:\s*([^\r\n]+)",
+                "commodity": r"^(?:commodity|description of goods)\s*:\s*([^\r\n]+)"}
     for field, pattern in patterns.items():
-        match = re.search(pattern, document["text"], re.I)
+        match = re.search(pattern, document["text"], re.I | re.M)
         if match:
-            result[field] = match.group(1).upper()
+            value = match.group(1).strip().upper()
+            result[field] = re.sub(r"[^A-Z0-9]+", "", value) if field in {"vessel", "commodity"} else value
     return result
 
 
 def validate_document_pair(si, bl):
     a, b = _identifiers(si), _identifiers(bl)
-    conflicts = [key for key in a.keys() & b.keys() if a[key] != b[key]]
-    return {"valid": not conflicts, "conflicts": conflicts, "si": a, "bl": b}
+    conflicts = sorted(key for key in a.keys() & b.keys() if key in {"booking", "oc", "bl"} and a[key] != b[key])
+    supporting_differences = sorted(key for key in a.keys() & b.keys()
+                                    if key in {"vessel", "commodity"} and a[key] != b[key])
+    return {"valid": not conflicts, "conflicts": conflicts,
+            "supporting_differences": supporting_differences, "si": a, "bl": b}
 
 
 def validate_document_consistency(document, fields=None):

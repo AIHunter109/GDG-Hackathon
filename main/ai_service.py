@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import os
+import re
 import urllib.error
 import urllib.request
 
@@ -108,3 +109,46 @@ class AIService:
         except (TypeError, ValueError):
             return None
         return {"text": result["text"], "confidence": confidence}
+
+    def explain_review(self, case):
+        """Summarize existing review evidence without changing the verification decision."""
+        if not self.enabled or case.get("status") != "NEEDS_REVIEW":
+            return None
+        evidence = {key: case.get(key) for key in
+                    ("internal_reason", "missing_fields", "uncertain_fields", "validation", "error")}
+        affected = set(case.get("missing_fields", [])) | set(case.get("uncertain_fields", []))
+        evidence["fields"] = {field: {role: case.get(role + "_fields", {}).get(field)
+                                      for role in ("si", "bl")} for field in affected & FIELDS}
+        result = self._json("Explain this shipping document review in plain business language. "
+                            "Use only the supplied evidence. Return JSON with a brief explanation "
+                            "and one recommended action. Do not infer missing values or decide whether "
+                            "the SI and BL match. Evidence: " + json.dumps(evidence, default=str))
+        if not isinstance(result, dict):
+            return None
+        explanation, action = result.get("explanation"), result.get("action")
+        if not all(isinstance(value, str) and 5 <= len(value.strip()) <= 240
+                   for value in (explanation, action)):
+            return None
+        return {"explanation": explanation.strip(), "action": action.strip()}
+
+    def draft_correction_email(self, case):
+        """Let AI word the request while application code inserts confirmed facts."""
+        if not self.enabled or case.get("status") != "MISMATCH" or not case.get("mismatches"):
+            return None
+        facts = [{"field": item["field"], "si_value": str(item["si"]["raw_value"]),
+                  "bl_value": str(item["bl"]["raw_value"])} for item in case["mismatches"]]
+        result = self._json("Return JSON with opening and closing sentences for a short, courteous "
+                            "email requesting a draft Bill of Lading correction. Use generic wording only. "
+                            "Do not include shipment facts, names, numbers, dates, deadlines, or recipients.")
+        if not isinstance(result, dict):
+            return None
+        opening, closing = result.get("opening"), result.get("closing")
+        if not all(isinstance(value, str) and 10 <= len(value.strip()) <= 180 and
+                   not re.search(r"\d|@|https?://|\n", value, re.I)
+                   for value in (opening, closing)):
+            return None
+        lines = ["Dear Team,", "", opening.strip(), ""]
+        for fact in facts:
+            lines.append(f"- {fact['field']}: SI says {fact['si_value']}; draft BL says {fact['bl_value']}.")
+        lines.extend(["", closing.strip(), "", "Best regards,"])
+        return "\n".join(lines)

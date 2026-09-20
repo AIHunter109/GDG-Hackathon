@@ -2,6 +2,7 @@
 
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -11,8 +12,8 @@ from ai_service import AIService
 from comparator import compare_documents, FIELDS
 from extractor import (extract_fields, identify_documents, normalize_value, read_document,
                        validate_document_consistency, validate_document_pair)
-from main import generate_submission
-from review_actions import apply_correction, mark_equivalent
+from main import generate_submission, process_email
+from review_actions import apply_correction, confirm_value, mark_equivalent
 
 
 def doc(text, path="sample.txt"):
@@ -28,6 +29,29 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["method"], "gemini")
         ai._json = lambda prompt, **kwargs: {"category": "MADE_UP", "confidence": 1}
         self.assertIsNone(ai.classify_email({"subject": "x", "body": "x", "attachments": []}))
+
+    def test_ai_review_explanation_is_brief_and_cannot_change_status(self):
+        ai = AIService(api_key="test")
+        ai._json = lambda prompt, **kwargs: {"explanation": "The gross weight is unclear in the source.",
+                                              "action": "Check the scan and confirm the value."}
+        case = {"status": "NEEDS_REVIEW", "internal_reason": "LOW_EXTRACTION_CONFIDENCE",
+                "uncertain_fields": ["gross_weight_kg"]}
+        self.assertIn("gross weight", ai.explain_review(case)["explanation"])
+        self.assertEqual(case["status"], "NEEDS_REVIEW")
+        ai._json = lambda prompt, **kwargs: {"explanation": "x", "action": "Confirm"}
+        self.assertIsNone(ai.explain_review(case))
+
+    def test_ai_draft_uses_confirmed_values_only(self):
+        ai = AIService(api_key="test")
+        case = {"status": "MISMATCH", "mismatches": [{"field": "container_count",
+                "si": {"raw_value": "3"}, "bl": {"raw_value": "4"}}]}
+        ai._json = lambda prompt, **kwargs: {"opening": "Please review the following discrepancy.",
+                                              "closing": "Please amend the draft accordingly."}
+        draft = ai.draft_correction_email(case)
+        self.assertIn("SI says 3; draft BL says 4", draft)
+        ai._json = lambda prompt, **kwargs: {"opening": "Please amend booking 123 by tomorrow.",
+                                              "closing": "Please amend the draft accordingly."}
+        self.assertIsNone(ai.draft_correction_email(case))
 
     def test_semantic_mapping_requires_source_evidence(self):
         ai = AIService(api_key="test")
@@ -95,6 +119,74 @@ TOTAL Gross Weight (KG): 21,577 KG"""))
         equivalent, record = mark_equivalent(case, "container_count")
         self.assertEqual(record["status"], "OK")
         self.assertEqual(equivalent["bl_fields"]["container_count"]["raw_value"], "3")
+
+    def test_confirming_one_value_preserves_other_uncertainty(self):
+        text = "Shipper: ACME\nConsignee: Buyer\nNotify: Buyer\nPOL: Klang\nPOD: Callao\nContainers: 2\nGross Weight: 400 KG"
+        si, bl = extract_fields(doc(text)), extract_fields(doc(text))
+        si["gross_weight_kg"]["confidence"] = .7
+        bl["gross_weight_kg"]["confidence"] = .8
+        case = {"category": "BL_COMPARISON", "status": "NEEDS_REVIEW", "si_fields": si,
+                "bl_fields": bl, "uncertain_fields": ["gross_weight_kg"]}
+        confirmed, record = confirm_value(case, "si", "gross_weight_kg")
+        self.assertEqual(record["status"], "NEEDS_REVIEW")
+        self.assertEqual(confirmed["uncertain_fields"], ["gross_weight_kg"])
+        confirmed, record = confirm_value(confirmed, "bl", "gross_weight_kg")
+        self.assertEqual(record["status"], "OK")
+        self.assertEqual(confirmed["uncertain_fields"], [])
+        self.assertEqual(si["gross_weight_kg"]["confidence"], .7)
+
+    def test_scanned_pdf_fallback_and_technical_failure(self):
+        class Inbox:
+            def read_bytes(self, path):
+                return b"not a text PDF"
+
+        class Vision:
+            enabled = True
+
+            def transcribe_pdf(self, data):
+                return {"text": "Shipper: ACME", "confidence": .8}
+
+        document = read_document("scan.pdf", Inbox(), Vision())
+        self.assertEqual(document["method"], "gemini_pdf_vision")
+        self.assertEqual(document["confidence"], .8)
+
+        class BrokenInbox:
+            def read_bytes(self, path):
+                raise OSError("Storage temporarily unavailable")
+
+        email = {"email_id": "broken", "subject": "Compare SI and draft BL",
+                 "body": "Please verify the attached shipping instruction against the draft BL.",
+                 "attachments": ["x_SI.txt", "x_BL.txt"]}
+        record, case = process_email(email, BrokenInbox())
+        self.assertEqual(case["status"], "PROCESSING_FAILED")
+        self.assertEqual(case["processing_step"], "Reading attachments")
+        self.assertEqual(case["failed_attachment"], "x_SI.txt")
+        self.assertEqual(record["status"], "NEEDS_REVIEW")
+
+    def test_force_vision_retry_uses_pdf_transcription(self):
+        class Inbox:
+            def read_bytes(self, path):
+                return b"pdf content"
+
+        class Page:
+            def extract_text(self):
+                return "Shipper: Native text"
+
+        class Reader:
+            pages = [Page()]
+
+        class Vision:
+            enabled = True
+
+            def transcribe_pdf(self, data):
+                return {"text": "Shipper: Vision text", "confidence": .85}
+
+        with patch("pypdf.PdfReader", return_value=Reader()):
+            native = read_document("document.pdf", Inbox(), Vision())
+            retry = read_document("document.pdf", Inbox(), Vision(), force_vision=True)
+        self.assertEqual(native["text"], "Shipper: Native text")
+        self.assertEqual(retry["text"], "Shipper: Vision text")
+        self.assertEqual(retry["method"], "gemini_pdf_vision")
 
     def test_full_bundle_schema_if_present(self):
         root = Path(__file__).resolve().parent.parent

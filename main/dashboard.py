@@ -15,28 +15,43 @@ sys.path.insert(0, str(ROOT))
 
 from call_for_help import draft_correction_email
 from ai_service import AIService
+from comparator import FIELDS
 from extractor import read_document
 from main import build_evidence_report, process_email
 from repository import get_repository
-from review_actions import apply_correction, mark_equivalent
+from review_actions import apply_correction, confirm_value, mark_equivalent, submission_for_case
 
 LOG = logging.getLogger(__name__)
 
 
-def metrics_for(cases):
+def metrics_for(cases, decisions=None):
+    decisions = decisions or {}
     statuses = Counter(c["status"] for c in cases.values())
     categories = Counter(c["category"] for c in cases.values())
     comparison = [c for c in cases.values() if c["category"] == "BL_COMPARISON"]
+    paired = [c for c in comparison if c.get("si_fields") is not None and c.get("bl_fields") is not None]
+    extracted = sum(c.get(role + "_fields", {}).get(field, {}).get("normalized_value") is not None
+                    for c in paired for role in ("si", "bl") for field in FIELDS)
+    unresolved_reviews = sum(c["status"] == "NEEDS_REVIEW" and
+                             decisions.get(email_id, {}).get("action") != "resolve"
+                             for email_id, c in cases.items())
     ai_assisted = sum(c.get("classification", {}).get("method") == "gemini" or
                       c.get("document_identification", {}).get("method") == "gemini_role_detection" or
                       any(field.get("method", "").startswith("gemini") for group in
                           (c.get("si_fields", {}), c.get("bl_fields", {})) for field in group.values())
                       for c in cases.values())
     return {"total": len(cases), "categories": dict(categories), "statuses": dict(statuses),
+            "verification_results": {**dict(Counter(c["status"] for c in comparison)),
+                                     "NOT_APPLICABLE": len(cases) - len(comparison)},
             "comparison_requests": len(comparison),
             "automatically_cleared": sum(c["status"] == "OK" for c in comparison),
-            "mismatches": statuses["MISMATCH"], "human_review": statuses["NEEDS_REVIEW"],
-            "processing_failures": sum(c.get("internal_reason") == "UNREADABLE_DOCUMENT" for c in comparison),
+            "mismatches": statuses["MISMATCH"],
+            "human_review": unresolved_reviews,
+            "processing_failures": statuses["PROCESSING_FAILED"],
+            "processing": statuses["PROCESSING"],
+            "field_extraction_coverage": extracted / (2 * len(FIELDS) * len(paired)) if paired else None,
+            "human_review_rate": unresolved_reviews / len(comparison) if comparison else 0,
+            "processing_failure_rate": statuses["PROCESSING_FAILED"] / len(cases) if cases else 0,
             "ai_assisted_cases": ai_assisted,
             "automation_rate": (sum(c["status"] == "OK" for c in comparison) / len(comparison)
                                 if comparison else 0)}
@@ -80,8 +95,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if parts == ["api", "cases"]:
                 cases = self.store().list_cases()
-                return self._send(200, {"cases": cases, "decisions": self.store().list_decisions(),
-                                        "metrics": metrics_for(cases),
+                decisions = self.store().list_decisions()
+                return self._send(200, {"cases": cases, "decisions": decisions,
+                                        "metrics": metrics_for(cases, decisions),
                                         "features": {"ai_enabled": AIService().enabled,
                                                      "cloud_mode": bool(os.getenv("GCS_BUCKET"))}})
             if len(parts) == 3 and parts[:2] == ["api", "email"]:
@@ -123,17 +139,43 @@ class Handler(BaseHTTPRequestHandler):
                     case, record = mark_equivalent(case, field)
                     store.save_case(email_id, case, record)
                     corrections = {"field": field}
-                elif choice not in {"confirm", "confirm_value", "resolve"}:
+                elif choice == "confirm_value":
+                    role, field = payload.get("role"), payload.get("field")
+                    case, record = confirm_value(case, role, field)
+                    store.save_case(email_id, case, record)
+                    corrections = {"role": role, "field": field}
+                elif choice not in {"confirm", "resolve"}:
                     raise ValueError("Unknown reviewer action")
                 decision = store.save_decision(email_id, choice, payload.get("note", ""), corrections)
+                LOG.info("Reviewer action %s on %s", choice, email_id)
                 return self._send(200, {"decision": decision, "case": case})
             if action == "draft":
                 decision = store.list_decisions().get(email_id, {})
-                return self._send(200, {"draft": draft_correction_email(
-                    case, confirmed=decision.get("action") == "confirm")})
+                fallback = draft_correction_email(case, confirmed=decision.get("action") == "confirm")
+                suggestion = AIService().draft_correction_email(case)
+                return self._send(200, {"draft": suggestion or fallback,
+                                        "source": "AI" if suggestion else "Template"})
+            if action == "explain":
+                explanation = AIService().explain_review(case)
+                if not explanation:
+                    raise ValueError("AI explanation is unavailable; review the source evidence shown in this case")
+                return self._send(200, explanation)
             if action == "retry":
-                record, refreshed = process_email(store.get_email(email_id), store)
-                case = build_evidence_report(refreshed)
+                vision = payload.get("vision") is True
+                if vision and not AIService().enabled:
+                    raise ValueError("AI vision is not configured for this demo")
+                LOG.info("Retrying %s%s", email_id, " with AI vision" if vision else "")
+                store.save_processing(email_id, case, "Retrying with OCR / Vision" if vision else "Retrying document verification")
+                try:
+                    record, refreshed = process_email(store.get_email(email_id), store,
+                                                      force_vision=vision)
+                    case = build_evidence_report(refreshed)
+                except Exception as exc:
+                    LOG.exception("Retry failed for %s", email_id)
+                    case = {**case, "status": "PROCESSING_FAILED", "internal_reason": "TECHNICAL_FAILURE",
+                            "review_reason": "unreadable", "processing_step": "Retrying document verification",
+                            "error": str(exc)}
+                    record = submission_for_case(case)
                 store.save_case(email_id, case, record)
                 return self._send(200, {"case": case, "submission": record})
             if action == "select_document":
