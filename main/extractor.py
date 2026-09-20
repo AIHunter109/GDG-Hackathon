@@ -88,6 +88,8 @@ def read_document(document, inbox=None, ai_service=None, *, force_vision=False):
     suffix = Path(path).suffix.lower()
     if suffix == ".txt":
         text = data.decode("utf-8-sig", errors="replace")
+        if text and text.count(chr(0xFFFD)) / len(text) > 0.05:
+            raise ValueError("Text attachment has invalid/corrupted encoding")
     elif suffix == ".xlsx":
         text = _xlsx_text(data)
     elif suffix == ".docx":
@@ -214,8 +216,18 @@ def normalize_value(field, value):
             flags=re.I,
         )[0].strip()
     if field == "container_count":
-        match = re.search(r"\d+", value.replace(",", ""))
-        return int(match.group()) if match else None
+        # Prefer the number next to an "x" separator ("5 x 40'HC" or the
+        # reversed "40'HC x 5") over blindly taking the first digits in the
+        # string, so the container *count* isn't confused with its size.
+        cleaned = value.replace(",", "")
+        match = (
+            re.search(r"(\d+)\s*x\b", cleaned, re.I)
+            or re.search(r"\bx\s*(\d+)", cleaned, re.I)
+            or re.search(r"\d+", cleaned)
+        )
+        if not match:
+            return None
+        return int(match.group(1) if match.groups() else match.group())
     if field == "gross_weight_kg":
         match = re.search(r"\d[\d,]*(?:\.\d+)?", value)
         if not match:

@@ -1,6 +1,7 @@
 """Persist reviewer decisions separately from automated predictions."""
 
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,6 +28,7 @@ def draft_correction_email(case, *, confirmed=False):
 class RaiseIssueToHuman:
     def __init__(self, path="review_decisions.json"):
         self.path = Path(path)
+        self._lock = threading.Lock()
 
     def _read(self):
         return (
@@ -59,12 +61,13 @@ class RaiseIssueToHuman:
             raise ValueError(f"Unknown reviewer action: {action}")
         if action == "correct" and not corrections:
             raise ValueError("Corrections are required for the correct action")
-        decisions = self._read()
-        decisions[email_id] = {
-            "action": action,
-            "note": note,
-            "corrections": corrections or {},
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        self.path.write_text(json.dumps(decisions, indent=2), encoding="utf-8")
-        return decisions[email_id]
+        with self._lock:
+            decisions = self._read()
+            decisions[email_id] = {
+                "action": action,
+                "note": note,
+                "corrections": corrections or {},
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            self.path.write_text(json.dumps(decisions, indent=2), encoding="utf-8")
+            return decisions[email_id]

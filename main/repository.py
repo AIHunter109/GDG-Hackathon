@@ -2,6 +2,7 @@
 
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -30,6 +31,7 @@ class LocalRepository:
         self.evidence_path = ROOT / "evidence.json"
         self.submission_path = ROOT / "submission.json"
         self.decisions = RaiseIssueToHuman(ROOT / "review_decisions.json")
+        self._lock = threading.Lock()
 
     def list_cases(self):
         return _read_json(self.evidence_path)
@@ -52,19 +54,23 @@ class LocalRepository:
         )
 
     def save_case(self, email_id, case, submission):
-        cases = self.list_cases()
-        records = _read_json(self.submission_path)
-        cases[email_id] = _stamp(case)
-        records[email_id] = submission
-        self.evidence_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
-        self.submission_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
+        with self._lock:
+            cases = self.list_cases()
+            records = _read_json(self.submission_path)
+            cases[email_id] = _stamp(case)
+            records[email_id] = submission
+            self.evidence_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
+            self.submission_path.write_text(
+                json.dumps(records, indent=2), encoding="utf-8"
+            )
 
     def save_processing(self, email_id, case, step="Retrying document verification"):
-        cases = self.list_cases()
-        cases[email_id] = _stamp(
-            {**case, "status": "PROCESSING", "processing_step": step}
-        )
-        self.evidence_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
+        with self._lock:
+            cases = self.list_cases()
+            cases[email_id] = _stamp(
+                {**case, "status": "PROCESSING", "processing_step": step}
+            )
+            self.evidence_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
 
 
 class CloudRepository:
