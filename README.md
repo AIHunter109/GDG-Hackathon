@@ -34,18 +34,22 @@ The included `Docker/server/score_cli.py` can evaluate a local bundle when groun
 
 The API also reports field extraction coverage, human-review rate, and processing-failure rate for the current cases. Coverage measures whether fields were found; measuring field extraction **accuracy** requires independently labeled field values. The scorer reports classification and mismatch results against its local ground truth.
 
-## Cloud Run deployment
+## No-billing cloud demo
 
-The root `Dockerfile` builds the same web app for Cloud Run. Set up a Google Cloud project with billing, a Firestore Native database, and a Cloud Storage bucket. Install the [Google Cloud CLI](https://docs.cloud.google.com/sdk/docs/install-sdk) and run `gcloud init` to sign in and select the project. The deployer needs [Cloud Run source deployment permissions](https://docs.cloud.google.com/run/docs/deploying-source-code), including access to use the runtime service account; the build service account may also need `roles/run.builder`. Use an account with Firestore and bucket write access for seeding. Skip the database, bucket, or service account creation commands below if those resources already exist.
+For the hackathon's AI and cloud criteria without enabling billing, use the [deployed Firebase Spark browser edition](https://seal-509214.web.app) and its [setup notes](spark/README.md). It uses Hosting, owner-only Firestore access to all 520 processed bundle emails, and Firebase AI Logic with Gemini's free tier. Sign in with the project owner Google account to see the dataset. The site's public files do not include the original emails or attachment binaries. Keep the project's billing disabled.
+
+## Cloud Run deployment (billing required)
+
+The root `Dockerfile` builds the Python server for Cloud Run. The target project is `seal-509214`. Its billing is currently disabled, so this optional path is not deployed; linking billing can incur charges. Firestore's default Standard database already exists in `asia-southeast1` for the Spark site. Cloud Run, Secret Manager, and Cloud Storage are not configured. The [Google Cloud CLI](https://docs.cloud.google.com/sdk/docs/install-sdk) is installed under `%LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin`, though it is not on `PATH`. The deployer needs [Cloud Run source deployment permissions](https://docs.cloud.google.com/run/docs/deploying-source-code), including access to use the runtime service account; the build service account may also need `roles/run.builder`. Use an account with Firestore and bucket write access for seeding. Skip resource creation commands when a resource already exists.
 
 ```powershell
-$projectId = '<PROJECT_ID>'
+$env:PATH = "$(Join-Path $env:LOCALAPPDATA 'Google\Cloud SDK\google-cloud-sdk\bin');$env:PATH"
+$projectId = 'seal-509214'
 $region = 'asia-southeast1'
 $bucketName = '<GLOBALLY_UNIQUE_BUCKET_NAME>'
 $serviceAccount = "shipping-verifier@$projectId.iam.gserviceaccount.com"
 gcloud config set project $projectId
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com firestore.googleapis.com storage.googleapis.com secretmanager.googleapis.com
-gcloud firestore databases create --database='(default)' --location=$region --edition=standard --type=firestore-native
 gcloud storage buckets create "gs://$bucketName" --location=$region --uniform-bucket-level-access --public-access-prevention
 gcloud iam service-accounts create shipping-verifier
 gcloud projects add-iam-policy-binding $projectId --member="serviceAccount:$serviceAccount" --role='roles/datastore.user'
@@ -53,14 +57,14 @@ gcloud storage buckets add-iam-policy-binding "gs://$bucketName" --member="servi
 gcloud run deploy shipping-verifier --source . --region=$region --service-account=$serviceAccount --no-allow-unauthenticated --set-env-vars="GCS_BUCKET=$bucketName,GOOGLE_CLOUD_PROJECT=$projectId"
 ```
 
-For Gemini, create a new auth [Gemini API key in Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key). Create a Secret Manager secret named `gemini-api-key` with that value using the [Cloud Console](https://docs.cloud.google.com/secret-manager/docs/create-secret-quickstart), then grant the runtime service account access and attach version 1 to Cloud Run:
+The project already has a Gemini API key restricted to `generativelanguage.googleapis.com`; a new key is unnecessary. Create a Secret Manager secret named `gemini-api-key` with that key using the [Cloud Console](https://docs.cloud.google.com/secret-manager/docs/create-secret-quickstart), then grant the runtime service account access and attach version 1 to Cloud Run:
 
 ```powershell
 gcloud secrets add-iam-policy-binding gemini-api-key --member="serviceAccount:$serviceAccount" --role='roles/secretmanager.secretAccessor'
 gcloud run services update shipping-verifier --region=$region --set-secrets='GEMINI_API_KEY=gemini-api-key:1'
 ```
 
-Do not put the key in source control or chat. The AI service uses the [Gemini generateContent API](https://ai.google.dev/api/generate-content) with JSON output. Verify it with a synthetic email and a scanned PDF retry; a configured key alone does not prove the live calls work.
+Do not put the key in source control or chat. The AI service uses the [Gemini generateContent API](https://ai.google.dev/api/generate-content) with JSON output. `main/check_gemini_live.py` verifies classification and OCR using only synthetic content. It passed with the existing key and `gemini-3.6-flash`; two calls to `gemini-3.8-flash` returned HTTP 503, so `3.6` is the current default. Set `GEMINI_MODEL` to choose a different model after verifying it. A real-document OCR test requires authorization to send that document to Gemini.
 
 Seed the case database and attachment bucket using Application Default Credentials on the upload machine:
 

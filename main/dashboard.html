@@ -3,7 +3,7 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Shipping Verification | Operations</title>
+        <title>SEAL | Shipping Document Verification</title>
         <style>
             :root {
                 font:
@@ -513,9 +513,9 @@
                     <div class="eyebrow" id="deployment-state">
                         Shipping operations
                     </div>
-                    <h1>Document verification</h1>
+                    <h1>SEAL</h1>
                     <p class="subtitle">
-                        AI understands. Rules verify. Humans resolve exceptions.
+                        Shipping document verification. AI understands. Rules verify. Humans resolve exceptions.
                         <span id="ai-state"></span>
                     </p>
                 </div>
@@ -526,11 +526,35 @@
                     class="metrics"
                     aria-label="Case summary filters"
                 ></div>
+                <section id="new-email-history" class="card hidden">
+                    <div class="card-head">
+                        <h2>New email history</h2>
+                        <span id="new-email-count" class="muted"></span>
+                    </div>
+                    <p class="muted">Emails submitted in this app appear here. The original 520 emails remain in the table below.</p>
+                    <div class="table-scroll">
+                        <table class="master">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Sender</th>
+                                    <th>Subject</th>
+                                    <th>Verification status</th>
+                                    <th>Attachments</th>
+                                    <th>Updated</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="new-email-table"></tbody>
+                        </table>
+                    </div>
+                </section>
                 <section class="card">
                     <div class="card-head">
-                        <h2>Cases</h2>
+                        <h2 id="case-table-heading">Cases</h2>
                         <span id="case-count" class="muted"></span>
                     </div>
+                    <p class="muted">Attachment count shows files listed on the source email. Zero means no files were attached; two usually means an SI and a draft BL.</p>
                     <div
                         id="quick-filters"
                         class="quick-filters"
@@ -580,7 +604,7 @@
                                     <th>Sender</th>
                                     <th>Classification</th>
                                     <th>Verification status</th>
-                                    <th>Documents</th>
+                                    <th>Attachments</th>
                                     <th>Updated</th>
                                     <th>Action</th>
                                 </tr>
@@ -662,6 +686,7 @@
                 mismatch: 0,
             };
             async function request(url, body) {
+                if (window.SPARK_MODE) return window.sparkRequest(url, body);
                 const response = await fetch(
                     url,
                     body === undefined
@@ -859,6 +884,11 @@
                     category = $("category-filter").value,
                     status = $("status-filter").value;
                 return Object.entries(state.cases).filter(([id, c]) => {
+                    if (
+                        state.features.cloud_mode &&
+                        state.features.new_case_ids?.includes(id)
+                    )
+                        return false;
                     const e = c.email || {},
                         key = resultKey(c),
                         filter = state.filter;
@@ -886,6 +916,47 @@
             }
             function renderDashboard() {
                 const m = state.metrics;
+                const isCloud = Boolean(state.features.cloud_mode);
+                const newIds = state.features.new_case_ids || [];
+                $("new-email-history").classList.toggle("hidden", !isCloud);
+                $("case-table-heading").textContent = isCloud
+                    ? "Original emails"
+                    : "Cases";
+                if (isCloud) {
+                    $("new-email-count").textContent =
+                        newIds.length + (newIds.length === 1 ? " submission" : " submissions");
+                    const historyRows = newIds
+                        .filter((id) => state.cases[id])
+                        .sort((a, b) =>
+                            (Date.parse(latestUpdate(state.cases[b], state.decisions[b])) || 0) -
+                            (Date.parse(latestUpdate(state.cases[a], state.decisions[a])) || 0),
+                        )
+                        .map((id) => {
+                            const c = state.cases[id];
+                            const row = node("tr", "", "clickable");
+                            row.tabIndex = 0;
+                            row.onclick = () => openCase(id);
+                            row.onkeydown = (event) => {
+                                if (event.key === "Enter") openCase(id);
+                            };
+                            row.append(
+                                node("td", id),
+                                node("td", c.email?.from || "—"),
+                                node("td", c.email?.subject || "—"),
+                                add(node("td"), node("span", resultLabel(c), "badge " + resultKey(c))),
+                                node("td", String(c.email?.attachments?.length || 0)),
+                                node("td", shortDate(latestUpdate(c, state.decisions[id]))),
+                                add(node("td"), button("View", () => openCase(id), "small-btn")),
+                            );
+                            return row;
+                        });
+                    if (!historyRows.length) {
+                        const cell = node("td", "No new emails submitted yet.", "muted");
+                        cell.colSpan = 7;
+                        historyRows.push(add(node("tr"), cell));
+                    }
+                    $("new-email-table").replaceChildren(...historyRows);
+                }
                 $("metrics").replaceChildren(
                     metric("Total Emails", m.total || 0, "all"),
                     metric(
@@ -921,8 +992,12 @@
                     }),
                 );
                 const entries = visibleCases();
+                const countDetails = state.features.cloud_mode
+                    ? " original emails"
+                    : "";
                 $("case-count").textContent =
-                    entries.length + " of " + (m.total || 0) + " cases";
+                    entries.length + " of " + (m.total || 0) +
+                    (isCloud ? countDetails : " cases");
                 $("case-table").replaceChildren(
                     ...entries.map(([id, c]) => {
                         const e = c.email || {},
@@ -1190,6 +1265,20 @@
                 );
                 head.append(box);
                 area.append(head);
+                if (window.SPARK_MODE && state.features.ai_enabled)
+                    area.append(
+                        add(
+                            section("Reanalyze documents"),
+                            node(
+                                "p",
+                                "Select this email's SI and draft BL files to update its verification result with Gemini.",
+                                "muted",
+                            ),
+                            button("Reanalyze with Gemini", () =>
+                                retry(id, true),
+                            ),
+                        ),
+                    );
                 if (
                     c.category === "BL_COMPARISON" &&
                     c.status !== "PROCESSING" &&
@@ -1715,10 +1804,27 @@
                     );
                 try {
                     if (path.toLowerCase().endsWith(".pdf")) {
-                        const frame = node("iframe");
-                        frame.src = apiPath("attachment", id, index);
-                        frame.title = path;
-                        slot.replaceChildren(select, frame);
+                        const source = window.SPARK_MODE
+                            ? window.sparkAttachmentUrl(id, index)
+                            : apiPath("attachment", id, index);
+                        if (source) {
+                            const frame = node("iframe");
+                            frame.src = source;
+                            frame.title = path;
+                            slot.replaceChildren(select, frame);
+                        } else {
+                            const doc = await request(apiPath("document", id, index));
+                            slot.replaceChildren(select);
+                            slot.append(
+                                doc.text && doc.text !== "Source text is unavailable."
+                                    ? node("pre", doc.text, "doc-text")
+                                    : node(
+                                          "p",
+                                          "The PDF file is not stored in the cloud. Use Retry with OCR / Vision to select the original SI and BL files.",
+                                          "notice warning",
+                                      ),
+                            );
+                        }
                     } else {
                         const doc = await request(
                             apiPath("document", id, index),
@@ -1773,7 +1879,9 @@
                         ...old,
                         status: "PROCESSING",
                         processing_step: vision
-                            ? "Retrying with OCR / Vision"
+                            ? window.SPARK_MODE
+                                ? "Reanalyzing with Gemini"
+                                : "Retrying with OCR / Vision"
                             : "Retrying document verification",
                     };
                     state.metrics.processing =
@@ -1835,7 +1943,14 @@
                 renderDashboard();
             };
             window.addEventListener("hashchange", route);
-            load();
+            if (window.SPARK_MODE)
+                window.addEventListener("spark-case-added", async () => {
+                    await refresh();
+                    route();
+                });
+            if (window.SPARK_MODE)
+                window.addEventListener("spark-ready", load, { once: true });
+            else load();
         </script>
     </body>
 </html>

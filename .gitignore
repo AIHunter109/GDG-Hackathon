@@ -24,6 +24,10 @@ env/
 # Local configuration
 .env
 .env.*
+/spark/node_modules/
+/spark/dist/
+/spark/private/
+/spark/index.html
 
 # Editor and operating-system files
 .vscode/
