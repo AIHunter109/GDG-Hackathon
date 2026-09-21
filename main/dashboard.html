@@ -3007,6 +3007,40 @@
                 state.summaryFilter = null;
                 renderDashboard();
             }
+            function renderLocalVerifyCard() {
+                if (window.SPARK_MODE) return;
+                const card = node("section", "", "card");
+                card.innerHTML = `
+                    <div class="card-head">
+                        <h2>Verify documents</h2>
+                        <span class="badge">Local workspace</span>
+                    </div>
+                    <p class="muted">
+                        Review documents from the configured inbox. The Python
+                        pipeline processes the local Bundle or Docker inbox;
+                        upload processing is available in the Spark workspace.
+                    </p>
+                    <label class="filter-field">Upload type
+                        <select disabled aria-label="Upload type">
+                            <option>One email with SI and BL</option>
+                            <option>Mixed SI/BL files or folder</option>
+                            <option>Separate SI and BL folders</option>
+                        </select>
+                    </label>
+                    <div class="toolbar">
+                        <input disabled placeholder="Sender email" aria-label="Sender email" />
+                        <input disabled placeholder="Email subject" aria-label="Email subject" />
+                        <button class="small-btn primary" type="button" disabled>
+                            Verify documents
+                        </button>
+                    </div>
+                    <p class="notice">
+                        Start the batch processor with
+                        <code>python3 main/main.py</code> to process the
+                        configured inbox, then refresh this dashboard.
+                    </p>`;
+                $("new-email-form-slot").append(card);
+            }
             $("back-button").onclick = showDashboard;
             $("verify-documents").onclick = () => {
                 showDashboard();
@@ -3051,6 +3085,7 @@
                 renderDashboard();
             };
             populateStatusFilter();
+            renderLocalVerifyCard();
             window.addEventListener("hashchange", route);
             if (window.SPARK_MODE)
                 window.addEventListener("spark-case-added", async () => {
