@@ -2,6 +2,8 @@
 
 import json
 import os
+import re
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,6 +28,8 @@ class LocalRepository:
         self.evidence_path = ROOT / "evidence.json"
         self.submission_path = ROOT / "submission.json"
         self.decisions = RaiseIssueToHuman(ROOT / "review_decisions.json")
+        self.upload_root = ROOT / ".local_uploads"
+        self.upload_manifest = self.upload_root / "emails.json"
 
     def list_cases(self):
         return _read_json(self.evidence_path)
@@ -34,10 +38,70 @@ class LocalRepository:
         return self.list_cases()[email_id]
 
     def get_email(self, email_id):
+        uploaded = _read_json(self.upload_manifest)
+        if email_id in uploaded:
+            return uploaded[email_id]
         return self.inbox.get(email_id)
 
     def read_bytes(self, path):
+        relative = Path(path)
+        if relative.parts and relative.parts[0] == ".local_uploads":
+            resolved = (ROOT / relative).resolve()
+            if self.upload_root.resolve() not in resolved.parents:
+                raise ValueError("Invalid local upload path")
+            return resolved.read_bytes()
         return self.inbox.read_bytes(path)
+
+    def list_new_case_ids(self):
+        return list(_read_json(self.upload_manifest))
+
+    def save_new_email(self, metadata, attachments):
+        """Persist a reviewer-submitted local email and its two attachments."""
+        self.upload_root.mkdir(exist_ok=True)
+        attachment_root = self.upload_root / "attachments"
+        attachment_root.mkdir(exist_ok=True)
+        email_id = "local_" + uuid.uuid4().hex[:12]
+        paths = []
+        for role, filename, content in attachments:
+            suffix = Path(filename).suffix.lower()
+            if suffix not in {".pdf", ".txt", ".xlsx", ".docx"}:
+                raise ValueError("Only PDF, TXT, XLSX, and DOCX documents are supported")
+            safe_role = re.sub(r"[^a-z0-9_-]", "", role.lower()) or "document"
+            relative = Path(".local_uploads") / "attachments" / f"{email_id}_{safe_role}{suffix}"
+            (ROOT / relative).write_bytes(content)
+            paths.append(relative.as_posix())
+        email = {
+            "email_id": email_id,
+            "from": str(metadata.get("from", ""))[:320],
+            "to": str(metadata.get("to", ""))[:320],
+            "subject": str(metadata.get("subject", ""))[:500],
+            "body": str(metadata.get("body", ""))[:20_000],
+            "attachments": paths,
+        }
+        uploaded = _read_json(self.upload_manifest)
+        uploaded[email_id] = email
+        self.upload_manifest.write_text(json.dumps(uploaded, indent=2), encoding="utf-8")
+        return email
+
+    def replace_documents(self, email_id, attachments):
+        """Store reviewer-selected replacement files while keeping the case identity."""
+        email = dict(self.get_email(email_id))
+        self.upload_root.mkdir(exist_ok=True)
+        attachment_root = self.upload_root / "attachments"
+        attachment_root.mkdir(exist_ok=True)
+        paths = []
+        for role, filename, content in attachments:
+            suffix = Path(filename).suffix.lower()
+            if suffix not in {".pdf", ".txt", ".xlsx", ".docx"}:
+                raise ValueError("Only PDF, TXT, XLSX, and DOCX documents are supported")
+            relative = Path(".local_uploads") / "attachments" / f"{email_id}_{role}{suffix}"
+            (ROOT / relative).write_bytes(content)
+            paths.append(relative.as_posix())
+        email["attachments"] = paths
+        uploaded = _read_json(self.upload_manifest)
+        uploaded[email_id] = email
+        self.upload_manifest.write_text(json.dumps(uploaded, indent=2), encoding="utf-8")
+        return email
 
     def list_decisions(self):
         return self.decisions.showIssue()

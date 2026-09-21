@@ -1,5 +1,7 @@
 """Shipping operations web app. Run: python main/dashboard.py"""
 
+import base64
+import binascii
 import json
 import logging
 import mimetypes
@@ -105,10 +107,13 @@ class Handler(BaseHTTPRequestHandler):
             if parts == ["api", "cases"]:
                 cases = self.store().list_cases()
                 decisions = self.store().list_decisions()
+                new_case_ids = (self.store().list_new_case_ids()
+                                if hasattr(self.store(), "list_new_case_ids") else [])
                 return self._send(200, {"cases": cases, "decisions": decisions,
                                         "metrics": metrics_for(cases, decisions),
                                         "features": {"ai_enabled": AIService().enabled,
                                                      "cloud_mode": bool(os.getenv("GCS_BUCKET")),
+                                                     "new_case_ids": new_case_ids,
                                                      "verified_performance": VERIFIED_PERFORMANCE}})
             if len(parts) == 3 and parts[:2] == ["api", "email"]:
                 return self._send(200, self.store().get_email(parts[2]))
@@ -130,12 +135,57 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) != 3 or parts[0] != "api":
                 return self._send(404, {"error": "Not found"})
             length = int(self.headers.get("Content-Length", "0"))
-            if length > 100_000:
+            action, email_id = parts[1], parts[2]
+            limit = 70_000_000 if action == "upload" else 100_000
+            if length > limit:
                 return self._send(413, {"error": "Request too large"})
             payload = json.loads(self.rfile.read(length) or b"{}")
-            action, email_id = parts[1], parts[2]
             store = self.store()
+            if action == "upload" and email_id == "new":
+                if not hasattr(store, "save_new_email"):
+                    raise ValueError("Local uploads are unavailable in this deployment")
+                metadata = payload.get("email") or {}
+                files = payload.get("files") or []
+                if not metadata.get("subject") or not metadata.get("body"):
+                    raise ValueError("Add a short description so the app can classify the submission")
+                if not 1 <= len(files) <= 10:
+                    raise ValueError("A verification submission must contain between 1 and 10 documents")
+                decoded = []
+                for index, item in enumerate(files):
+                    try:
+                        content = base64.b64decode(item.get("content", ""), validate=True)
+                    except (binascii.Error, ValueError) as exc:
+                        raise ValueError("An uploaded document could not be read") from exc
+                    if not content or len(content) > 5_000_000:
+                        raise ValueError("Each document must be between 1 byte and 5 MB")
+                    decoded.append((item.get("role") or f"document_{index + 1}",
+                                    item.get("name", "document"), content))
+                email = store.save_new_email(metadata, decoded)
+                record, case = process_email(email, store)
+                case = build_evidence_report(case)
+                store.save_case(email["email_id"], case, record)
+                return self._send(201, {"case": case, "submission": record})
             case = store.get_case(email_id)
+            if action == "reanalyze":
+                if not hasattr(store, "replace_documents"):
+                    raise ValueError("Local document replacement is unavailable in this deployment")
+                files = payload.get("files") or []
+                if len(files) != 2 or {item.get("role") for item in files} != {"si", "bl"}:
+                    raise ValueError("Select one SI and one draft BL")
+                decoded = []
+                for item in files:
+                    try:
+                        content = base64.b64decode(item.get("content", ""), validate=True)
+                    except (binascii.Error, ValueError) as exc:
+                        raise ValueError("A selected document could not be read") from exc
+                    if not content or len(content) > 5_000_000:
+                        raise ValueError("Each document must be between 1 byte and 5 MB")
+                    decoded.append((item["role"], item.get("name", "document"), content))
+                email = store.replace_documents(email_id, decoded)
+                record, refreshed = process_email(email, store, force_vision=AIService().enabled)
+                refreshed = build_evidence_report(refreshed)
+                store.save_case(email_id, refreshed, record)
+                return self._send(200, {"case": refreshed, "submission": record})
             if action == "decision":
                 choice = payload.get("action")
                 corrections = {}

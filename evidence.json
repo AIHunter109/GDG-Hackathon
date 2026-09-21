@@ -29133,5 +29133,25 @@
       }
     },
     "updated_at": "2026-09-21T04:58:42.850214+00:00"
+  },
+  "local_8ae5be4d8c4f": {
+    "email_id": "local_8ae5be4d8c4f",
+    "email": {
+      "from": "",
+      "to": "",
+      "subject": "Review submission: submission",
+      "body": "Please review and classify the attached document or email.",
+      "attachments": [
+        ".local_uploads/attachments/local_8ae5be4d8c4f_document_1.txt"
+      ]
+    },
+    "category": "GENERAL",
+    "classification": {
+      "category": "GENERAL",
+      "confidence": 0.7,
+      "reason": "No comparison or specific request detected"
+    },
+    "status": "OK",
+    "updated_at": "2026-09-21T16:52:36.804296+00:00"
   }
 }

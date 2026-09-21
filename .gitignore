@@ -8,6 +8,7 @@ evidence.json
 review_decisions.json
 review_diagnostics.json
 dashboard.*.log
+.local_uploads/
 .uv-cache/
 
 # Python

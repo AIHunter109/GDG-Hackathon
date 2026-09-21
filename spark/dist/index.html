@@ -611,7 +611,45 @@
                     <span id="firestore-status" class="status-item">Local workspace</span>
                     <span id="gemini-status" class="status-item">Gemini unavailable</span>
                 </div>
-                <div id="new-email-form-slot"></div>
+                <div id="new-email-form-slot">
+                    <section id="local-upload-card" class="card">
+                        <div class="card-head"><h2>Verify documents</h2><span class="badge">Local workspace</span></div>
+                        <p class="muted">Choose only how the files are arranged. The app identifies SI/BL pairs, classifies other email types such as general or spam, runs the appropriate workflow, and adds every result to New email history.</p>
+                        <form id="local-upload-form" class="toolbar">
+                            <label class="filter-field">What are you adding?
+                                <select id="local-upload-mode" name="mode">
+                                    <option value="one">One email with files</option>
+                                    <option value="mixed">Mixed files or one mixed folder</option>
+                                    <option value="folders">Separate SI and BL folders</option>
+                                </select>
+                            </label>
+                            <div id="local-email-details" class="toolbar">
+                                <input name="from" type="email" aria-label="Sender email" placeholder="Sender email (optional)">
+                                <input name="subject" aria-label="Short title" placeholder="Short title (optional)">
+                                <textarea name="body" aria-label="Quick introduction" placeholder="Quick introduction or paste the email text. The app will classify it automatically."></textarea>
+                            </div>
+                            <div id="local-one-inputs">
+                                <label>Files (optional for General, Spam, SI Request, or Invoice Query)
+                                    <input name="one_files" type="file" accept=".pdf,.txt,.xlsx,.docx,application/pdf,text/plain" multiple>
+                                </label>
+                            </div>
+                            <div id="local-mixed-inputs" class="hidden">
+                                <label>Mixed files
+                                    <input name="mixed_files" type="file" accept=".pdf,.txt,.xlsx,.docx,application/pdf,text/plain" multiple>
+                                </label>
+                                <label>Or choose one mixed folder
+                                    <input name="mixed_folder" type="file" accept=".pdf,.txt,.xlsx,.docx,application/pdf,text/plain" multiple webkitdirectory>
+                                </label>
+                            </div>
+                            <div id="local-folder-inputs" class="hidden">
+                                <label>SI folder <input name="si_files" type="file" multiple webkitdirectory></label>
+                                <label>Draft BL folder <input name="bl_files" type="file" multiple webkitdirectory></label>
+                            </div>
+                            <button class="small-btn primary" type="submit">Run automatic verification</button>
+                            <span id="local-upload-status" class="muted" role="status"></span>
+                        </form>
+                    </section>
+                </div>
                 <section class="card" id="overview-card">
                     <div class="card-head">
                         <h2>Dataset and Verification Overview</h2>
@@ -1227,10 +1265,7 @@
                     category = $("category-filter").value,
                     status = $("status-filter").value;
                 return Object.entries(state.cases).filter(([id, c]) => {
-                    if (
-                        state.features.cloud_mode &&
-                        state.features.new_case_ids?.includes(id)
-                    )
+                    if (state.features.new_case_ids?.includes(id))
                         return false;
                     const e = c.email || {};
                     const statusMatch = statusMatches(id, c, status);
@@ -1266,8 +1301,9 @@
                 $("gemini-status").textContent = state.features.ai_enabled
                     ? "Gemini assistance available"
                     : "Gemini assistance unavailable";
-                $("new-email-history").classList.toggle("hidden", !isCloud);
-                if (isCloud) {
+                const showHistory = isCloud || !window.SPARK_MODE;
+                $("new-email-history").classList.toggle("hidden", !showHistory);
+                if (showHistory) {
                     $("new-email-count").textContent =
                         newIds.length + (newIds.length === 1 ? " submission" : " submissions");
                     const historyRows = newIds
@@ -1597,7 +1633,13 @@
                 renderCaseManagement(c, area);
                 if (c.category !== "BL_COMPARISON") renderCategoryWorkflow(c, area);
                 renderProcessingMethod(c, area);
-                if (c.category === "BL_COMPARISON" && window.SPARK_MODE && state.features.ai_enabled)
+                if (c.category === "BL_COMPARISON") {
+                    const reanalyzeAction = button(
+                        state.features.ai_enabled ? "Reanalyze with Gemini" : "Reanalyze documents",
+                        () => window.SPARK_MODE ? retry(id, true) : reanalyzeLocal(id),
+                        "primary",
+                    );
+                    reanalyzeAction.disabled = window.SPARK_MODE && !state.features.ai_enabled;
                     area.append(
                         add(
                             section("Reanalyze documents"),
@@ -1606,11 +1648,13 @@
                                 "Select this email's SI and draft BL files to update its verification result with Gemini.",
                                 "muted",
                             ),
-                            button("Reanalyze with Gemini", () =>
-                                retry(id, true),
-                            ),
+                            reanalyzeAction,
+                            !state.features.ai_enabled
+                                ? node("p", "Gemini is not configured locally; native extraction will run. Set GEMINI_API_KEY and restart to enable Gemini analysis.", "muted")
+                                : node("span"),
                         ),
                     );
+                }
                 if (
                     c.category === "BL_COMPARISON" &&
                     c.status !== "NOT_APPLICABLE"
@@ -2458,12 +2502,137 @@
                     alert(error.message);
                 }
             }
+            function chooseReanalysisFiles() {
+                return new Promise((resolve) => {
+                    const dialog = document.createElement("dialog"), form = document.createElement("form");
+                    form.innerHTML = `<h3>Reanalyze documents</h3><p>Select this email's SI and draft BL files to update its verification result.</p><label>Shipping instruction <input name="si" type="file" accept=".pdf,.txt,.xlsx,.docx" required></label><label>Draft BL <input name="bl" type="file" accept=".pdf,.txt,.xlsx,.docx" required></label><div class="actions"><button class="small-btn primary" type="submit">Analyze selected files</button><button class="small-btn" name="cancel" type="button">Cancel</button></div>`;
+                    dialog.append(form); document.body.append(dialog);
+                    const close = (value) => { dialog.close(); dialog.remove(); resolve(value); };
+                    form.elements.cancel.onclick = () => close(null);
+                    dialog.oncancel = (event) => { event.preventDefault(); close(null); };
+                    form.onsubmit = (event) => { event.preventDefault(); close({ si: form.elements.si.files[0], bl: form.elements.bl.files[0] }); };
+                    dialog.showModal();
+                });
+            }
+            async function reanalyzeLocal(id) {
+                const files = await chooseReanalysisFiles();
+                if (!files) return;
+                const toBase64 = (file) => new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result).split(",", 2)[1]);
+                    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+                    reader.readAsDataURL(file);
+                });
+                try {
+                    await request(apiPath("reanalyze", id), {
+                        files: [
+                            { role: "si", name: files.si.name, content: await toBase64(files.si) },
+                            { role: "bl", name: files.bl.name, content: await toBase64(files.bl) },
+                        ],
+                    });
+                    await refresh();
+                } catch (error) { alert(error.message); }
+            }
             function renderAfterManualFilter() {
                 state.reasonFilter = null;
                 state.summaryFilter = null;
                 renderDashboard();
             }
             $("back-button").onclick = showDashboard;
+            if (window.SPARK_MODE) $("local-upload-card")?.remove();
+            const localUploadForm = $("local-upload-form");
+            const uploadMode = $("local-upload-mode");
+            if (uploadMode) uploadMode.onchange = () => {
+                $("local-email-details").classList.toggle("hidden", uploadMode.value !== "one");
+                $("local-one-inputs").classList.toggle("hidden", uploadMode.value !== "one");
+                $("local-mixed-inputs").classList.toggle("hidden", uploadMode.value !== "mixed");
+                $("local-folder-inputs").classList.toggle("hidden", uploadMode.value !== "folders");
+            };
+            if (localUploadForm) localUploadForm.onsubmit = async (event) => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                const status = $("local-upload-status");
+                const submit = form.querySelector("button[type=submit]");
+                const toBase64 = (file) => new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result).split(",", 2)[1]);
+                    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+                    reader.readAsDataURL(file);
+                });
+                const supported = /\.(pdf|txt|xlsx|docx)$/i;
+                const tokens = (name) => name.replace(/\.[^.]+$/, "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+                const roleOf = (file, forced) => {
+                    if (forced) return forced;
+                    const words = tokens(`${file.webkitRelativePath || ""} ${file.name}`);
+                    const si = words.includes("si") || words.join("").includes("shippinginstruction");
+                    const bl = words.includes("bl") || words.join("").includes("billoflading") || words.join("").includes("draftbl");
+                    return si !== bl ? (si ? "si" : "bl") : null;
+                };
+                const pairKey = (file) => tokens(file.name)
+                    .filter((word) => !["si", "bl", "shipping", "instruction", "instructions", "bill", "of", "lading", "draft"].includes(word))
+                    .join("_") || file.name.replace(/\.[^.]+$/, "").toLowerCase();
+                const makeJobs = () => {
+                    const mode = form.elements.mode.value;
+                    if (mode === "one") {
+                        const files = [...form.elements.one_files.files];
+                        return [{ key: "submission", files: files.map((file, index) => ({ file, role: roleOf(file) || `document_${index + 1}` })) }];
+                    }
+                    const inputs = mode === "mixed"
+                        ? [...form.elements.mixed_files.files, ...form.elements.mixed_folder.files]
+                            .map((file) => ({ file, role: roleOf(file) }))
+                        : [
+                            ...[...form.elements.si_files.files].map((file) => ({ file, role: "si" })),
+                            ...[...form.elements.bl_files.files].map((file) => ({ file, role: "bl" })),
+                        ];
+                    const groups = new Map();
+                    for (const item of inputs) {
+                        const key = pairKey(item.file);
+                        if (!groups.has(key)) groups.set(key, []);
+                        groups.get(key).push(item);
+                    }
+                    return [...groups].map(([key, files]) => ({ key, files }));
+                };
+                const jobs = makeJobs();
+                if (!jobs.length || jobs.some((job) => job.files.some(({ file }) => !supported.test(file.name) || file.size > 5_000_000))) {
+                    status.textContent = "Choose PDF, TXT, XLSX, or DOCX files up to 5 MB each.";
+                    return;
+                }
+                submit.disabled = true;
+                status.className = "muted";
+                status.textContent = `Processing ${jobs.length} submission${jobs.length === 1 ? "" : "s"}â€¦`;
+                try {
+                    let lastResult;
+                    for (let index = 0; index < jobs.length; index++) {
+                        const job = jobs[index];
+                        const hasPair = job.files.some((item) => item.role === "si") && job.files.some((item) => item.role === "bl");
+                        const intro = form.elements.body.value.trim();
+                        const body = intro || (hasPair
+                            ? "Please verify and compare the attached shipping instruction and draft BL."
+                            : "Please review and classify the attached document or email.");
+                        status.textContent = `Processing ${index + 1} of ${jobs.length}: ${job.key}â€¦`;
+                        lastResult = await request("/api/upload/new", {
+                            email: {
+                                from: form.elements.from.value.trim(),
+                                subject: form.elements.subject.value.trim() || (hasPair ? `Verify documents: ${job.key}` : `Review submission: ${job.key}`),
+                                body,
+                            },
+                            files: await Promise.all(job.files.map(async ({ file, role }) => ({
+                                role, name: file.name, content: await toBase64(file),
+                            }))),
+                        });
+                    }
+                    form.reset();
+                    uploadMode.onchange();
+                    status.textContent = `${jobs.length} result${jobs.length === 1 ? "" : "s"} saved to New email history.`;
+                    await refresh();
+                    if (jobs.length === 1) location.hash = `case/${encodeURIComponent(lastResult.case.email_id)}`;
+                } catch (error) {
+                    status.textContent = error.message;
+                    status.className = "notice error";
+                } finally {
+                    submit.disabled = false;
+                }
+            };
             $("verify-documents").onclick = () => {
                 showDashboard();
                 setTimeout(() => $("new-email-form-slot").scrollIntoView({ behavior: "smooth", block: "start" }));
