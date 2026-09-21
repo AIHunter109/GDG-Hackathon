@@ -1,6 +1,52 @@
-# Shipping document verification
+# SEAL — Shipping Document Verification
 
 The pipeline reads `Bundle.loader.Inbox`, classifies each email, compares the seven official SI and draft BL fields, and writes the competition schema to `submission.json`. It also writes detailed extraction and review evidence to `evidence.json`.
+
+The seven verified fields are:
+
+- Shipper
+- Consignee
+- Notify party
+- Port of loading
+- Port of discharge
+- Container count
+- Gross weight in kilograms
+
+## What the system provides
+
+- **Email classification:** separates document comparisons, SI requests, invoice queries, general email, and spam.
+- **Document processing:** reads TXT, XLSX, DOCX, and PDF in the Python pipeline. Native extraction runs first; Gemini is used only for uncertain intent, ambiguous document roles, unfamiliar labels, image-only PDFs, and requested review explanations.
+- **Deterministic verification:** normalizes the seven fields, checks shipment identifiers and document totals, then reports no mismatch, mismatch, human review, processing, or processing failure. AI does not make the final comparison decision.
+- **Reviewer workspace:** shows dashboard totals, combined search/category/status filters, the 520 source emails, attachment counts, and a separate history for new submissions.
+- **Case Detail:** shows the email, attachment text, SI and draft BL evidence, normalized values, discrepancies, validation results, and reviewer actions in one page.
+- **Human review:** reviewers can confirm or correct a field, mark values equivalent, choose which attachment is the SI or draft BL, retry extraction or OCR, confirm a mismatch, resolve a review, and reopen a completed review.
+- **Correction drafting:** creates a draft only after a mismatch is confirmed. The application never sends it automatically.
+- **Combined upload:** one **Add emails and documents** function supports a single email with SI/BL files, mixed SI/BL files or a folder, and separate SI and BL folders.
+- **Batch safety:** previews pairs before processing, leaves unclear files unprocessed for manual pairing, handles 1–10 pairs per run, pauses after the current pair, retries failures, and skips saved file signatures.
+- **Private cloud demo:** Firebase Authentication and Firestore rules restrict the original dataset to the verified project owner. The public Hosting files contain no original email data or attachment binaries.
+
+### Status meanings
+
+| Status | Meaning |
+| --- | --- |
+| No mismatch detected | All seven available normalized SI and draft BL values agree. |
+| Mismatch detected | At least one verified field differs. |
+| Human review required | A document, value, role, identifier, or AI-derived extraction needs reviewer confirmation. |
+| Human review completed | A reviewer resolved the case; it can be reopened from Case Detail. |
+| Processing | Verification or reanalysis is running. |
+| Processing failed | A technical step failed and can be retried. |
+| Not applicable | The email is not an SI/draft BL comparison. |
+
+### Implementations
+
+| Capability | Local Python app | Hosted Firebase app |
+| --- | --- | --- |
+| Source dataset | Local `Bundle` or compatible URL | 520 private Firestore records |
+| Supported source documents | TXT, XLSX, DOCX, PDF | Existing processed records; new PDF/TXT uploads |
+| AI access | Server-side `GEMINI_API_KEY` | Firebase AI Logic in the signed-in browser |
+| State | Local JSON files | Private Firestore workspace |
+| Attachments | Read from the local bundle | Original binaries stay local; extracted text is private in Firestore |
+| Deployment | Local server or optional Cloud Run | Firebase Hosting on the Spark plan |
 
 ## Run on Windows
 
@@ -14,7 +60,7 @@ uv pip install --python .venv\Scripts\python.exe -r main\requirements.txt
 
 `python main/main.py --source <bundle-or-http-url> --output <path> --evidence <path>` accepts another bundle or the organizer's inbox endpoint.
 
-TXT, XLSX, and DOCX extraction use the Python standard library. Selectable PDF text uses pypdf. Set `GEMINI_API_KEY` to enable AI fallback for uncertain email intent, document roles, unfamiliar labels, and image-only PDF transcription. AI output is checked against source evidence and low-confidence extraction is sent to human review. The model never performs the final SI/BL comparison. Decisions use `NEEDS_REVIEW` plus the bundle's allowed review reasons in the submission. More specific internal reasons and source text remain in `evidence.json`.
+TXT, XLSX, and DOCX extraction use the Python standard library. Selectable PDF text uses pypdf. Set `GEMINI_API_KEY` to enable AI fallback for uncertain email intent, document roles, unfamiliar labels, and image-only PDF transcription. AI output is checked against source evidence and low-confidence extraction is sent to human review. Decisions use `NEEDS_REVIEW` plus the bundle's allowed review reasons in the submission. More specific internal reasons and source text remain in `evidence.json`.
 
 ## Reviewer dashboard
 
@@ -24,7 +70,13 @@ TXT, XLSX, and DOCX extraction use the Python standard library. Selectable PDF t
 
 Open `http://127.0.0.1:8765`. The Dashboard is the home page. Summary cards show totals, while search, category, and status filters narrow the email table; opening a row takes you to its Case Detail page. The detail page keeps the seven-field SI/BL comparison, clickable mismatch evidence, human-review actions, and expandable email and attachments together. A reviewer can confirm or correct a selected value, mark two values equivalent, choose the SI and draft BL, retry extraction, confirm a mismatch, resolve a review, or undo review completion. Value changes rerun the comparison and update the case and submission. If Gemini is configured, an on-demand AI explanation can summarize review evidence and PDF cases can be retried with OCR/Vision; the verification rules still decide the result. A correction email draft, optionally worded by AI, is available only after a mismatch is confirmed; the reviewer must send it separately.
 
-The hosted browser edition has one **Add emails and documents** function with modes for one email, mixed PDF/TXT files or folder, and separate SI and BL folders. Batch modes preview filename-based pairs before processing, keep unclear or incomplete pairs out of verification, support manual pairing, process up to 10 pairs per run, and skip previously saved file signatures. Complete TXT documents are extracted locally; PDFs are sent to Gemini only after the reviewer starts processing.
+The hosted browser edition has one **Add emails and documents** function with these modes:
+
+1. **One email with SI and BL:** captures sender, recipient, subject, body, and two documents. If the documents belong to one of the original 520 emails, the app opens that email for reanalysis instead of creating a duplicate.
+2. **Mixed SI/BL files or folder:** identifies roles from names and folders, pairs documents by a shared shipment key, and presents the proposed pairs before processing.
+3. **Separate SI and BL folders:** pairs corresponding files across the two folders and presents incomplete or ambiguous matches for manual action.
+
+The browser uploader accepts PDF and TXT files up to 5 MB each. TXT documents are read locally in the browser. In single-email mode, Gemini can fill missing TXT fields after the reviewer starts analysis; batch TXT processing remains local and routes incomplete extraction to review. PDFs use Gemini only after processing begins. Batch processing handles 1–10 pairs per run and supports pause, retry, manual pairing, and duplicate skipping. Conflicting booking, OC, or BL identifiers are routed to human review. New emails and completed document batches appear under **New email history**; they do not change the count of 520 original emails.
 
 Retries show a `Processing` state, then the updated result. Technical failures appear as `Processing failed` with the failed step and Retry action. The competition export maps these to the schema's `NEEDS_REVIEW` status and `unreadable` reason. A scanned document that cannot be transcribed remains `Human review required` in the app. Use [main/USER_TESTING.md](main/USER_TESTING.md) to run and record a human usability session.
 
@@ -38,9 +90,21 @@ The API also reports field extraction coverage, human-review rate, and processin
 
 ## No-billing cloud demo
 
-For the hackathon's AI and cloud criteria without enabling billing, use the [deployed Firebase Spark browser edition](https://seal-509214.web.app) and its [setup notes](spark/README.md). It uses Hosting, owner-only Firestore access to all 520 processed bundle emails, and Firebase AI Logic with Gemini's free tier. Sign in with the project owner Google account to see the dataset. The site's public files do not include the original emails or attachment binaries. Keep the project's billing disabled.
+For the hackathon's AI and cloud criteria without enabling billing, use the [deployed Firebase Spark browser edition](https://seal-509214.web.app) and its [setup notes](spark/README.md). It uses Firebase Hosting, Google sign-in, owner-only Firestore access to all 520 processed bundle emails, and Firebase AI Logic with the Gemini Developer API free tier. Sign in with the verified project owner Google account to see the dataset. Reviewer decisions and new submissions are stored under the signed-in user's private Firestore workspace.
 
-## Cloud Run deployment (billing required)
+Original attachment binaries are not uploaded to Firebase. Private Firestore records contain email metadata, email bodies, extracted attachment text, field evidence, and verification results. Locally selected documents are sent to Gemini only when the reviewer explicitly starts analysis or OCR. Keep project billing disabled; the deployment script stops if billing is enabled.
+
+### Build, test, and deploy the browser edition
+
+```powershell
+& 'C:\Program Files\nodejs\npm.cmd' test --prefix spark
+& 'C:\Program Files\nodejs\npm.cmd' run build --prefix spark
+.venv\Scripts\python.exe spark\deploy_hosting.py
+```
+
+The deployment script publishes Hosting files only after checking that project billing remains disabled. Firestore data seeding and security rule details are documented in [spark/README.md](spark/README.md).
+
+## Optional Cloud Run deployment (billing required)
 
 The root `Dockerfile` builds the Python server for Cloud Run. The target project is `seal-509214`. Its billing is currently disabled, so this optional path is not deployed; linking billing can incur charges. Firestore's default Standard database already exists in `asia-southeast1` for the Spark site. Cloud Run, Secret Manager, and Cloud Storage are not configured. The [Google Cloud CLI](https://docs.cloud.google.com/sdk/docs/install-sdk) is installed under `%LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin`, though it is not on `PATH`. The deployer needs [Cloud Run source deployment permissions](https://docs.cloud.google.com/run/docs/deploying-source-code), including access to use the runtime service account; the build service account may also need `roles/run.builder`. Use an account with Firestore and bucket write access for seeding. Skip resource creation commands when a resource already exists.
 
