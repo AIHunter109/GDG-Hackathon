@@ -372,61 +372,61 @@ class AIService:
         return {"explanation": explanation.strip(), "action": action.strip()}
 
     def review_case(self, case):
-        """Give a reviewer a short, evidence-grounded opinion on a NEEDS_REVIEW
-        case for the background dashboard worker. Never changes the
-        verification decision -- same guardrail as explain_review, plus an
-        anti-hallucination check on the model's own cited proof: it must be a
-        verbatim quote from the evidence sent, not a paraphrase."""
-        if not self.enabled or case.get("status") != "NEEDS_REVIEW":
-            return None
-        evidence = {
-            key: case.get(key)
-            for key in (
-                "internal_reason",
-                "missing_fields",
-                "uncertain_fields",
-                "validation",
-                "error",
-            )
-        }
-        affected = set(case.get("missing_fields", [])) | set(
-            case.get("uncertain_fields", [])
-        )
-        evidence["fields"] = {
-            field: {
-                role: case.get(role + "_fields", {}).get(field) for role in ("si", "bl")
+            """Give a reviewer a short, evidence-grounded opinion on a NEEDS_REVIEW
+            case for the background dashboard worker. Never changes the
+            verification decision -- same guardrail as explain_review, plus an
+            anti-hallucination check on the model's own cited proof: it must be a
+            verbatim quote from the evidence sent, not a paraphrase."""
+            if not self.enabled or case.get("status") != "NEEDS_REVIEW":
+                return None
+            evidence = {
+                key: case.get(key)
+                for key in (
+                    "internal_reason",
+                    "missing_fields",
+                    "uncertain_fields",
+                    "validation",
+                    "error",
+                )
             }
-            for field in affected & FIELDS
-        }
-        evidence_text = json.dumps(evidence, default=str)
-        result = self._json(
-            "Give a shipping operations reviewer a short opinion on why this case "
-            "needs human review. Use only the supplied evidence. Do not infer "
-            "missing values or decide whether the SI and BL match -- that stays "
-            "a human decision. Return a JSON object with exactly these three "
-            'keys and no others: "assessment" (plain-language opinion on what '
-            'is actually going on), "proof" (an exact, verbatim quote copied '
-            "character-for-character from the evidence below -- do not "
-            'paraphrase or summarize it), and "recommended_action" (one '
-            "concrete next step for the reviewer). Evidence: " + evidence_text
-        )
-        if not isinstance(result, dict):
-            return None
-        assessment, proof, action = (
-            result.get(key) for key in ("assessment", "proof", "recommended_action")
-        )
-        if not all(
-            isinstance(value, str) and 5 <= len(value.strip()) <= 300
-            for value in (assessment, proof, action)
-        ):
-            return None
-        if proof.strip() not in evidence_text:
-            return None
-        return {
-            "assessment": assessment.strip(),
-            "proof": proof.strip(),
-            "recommended_action": action.strip(),
-        }
+            affected = set(case.get("missing_fields", [])) | set(
+                case.get("uncertain_fields", [])
+            )
+            evidence["fields"] = {
+                field: {
+                    role: case.get(role + "_fields", {}).get(field) for role in ("si", "bl")
+                }
+                for field in affected & FIELDS
+            }
+            evidence_text = json.dumps(evidence, default=str)
+            result = self._json(
+                "Give a shipping operations reviewer a short opinion on why this case "
+                "needs human review. Use only the supplied evidence. Do not infer "
+                "missing values or decide whether the SI and BL match -- that stays "
+                "a human decision. Return a JSON object with exactly these three "
+                'keys and no others: "assessment" (plain-language opinion on what '
+                'is actually going on), "proof" (an exact, verbatim quote copied '
+                "character-for-character from the evidence below -- do not "
+                'paraphrase or summarize it), and "recommended_action" (one '
+                "concrete next step for the reviewer). Evidence: " + evidence_text
+            )
+            if not isinstance(result, dict):
+                return None
+            assessment, proof, action = (
+                result.get(key) for key in ("assessment", "proof", "recommended_action")
+            )
+            if not all(
+                isinstance(value, str) and 5 <= len(value.strip()) <= 300
+                for value in (assessment, proof, action)
+            ):
+                return None
+            if proof.strip() not in evidence_text:
+                return None
+            return {
+                "assessment": assessment.strip(),
+                "proof": proof.strip(),
+                "recommended_action": action.strip(),
+            }
 
     def draft_correction_email(self, case):
         """Let AI word the request while application code inserts confirmed facts."""

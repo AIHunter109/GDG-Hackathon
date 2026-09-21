@@ -701,11 +701,7 @@ function renderAiOpinion(c, panel) {
   if (!review || review.status === "pending" || review.status === "running") {
     card.append(
       node("h4", "AI opinion"),
-      node(
-        "p",
-        "AI is reviewing this case -- check back shortly.",
-        "notice",
-      ),
+      node("p", "AI is reviewing this case -- check back shortly.", "notice"),
     );
   } else if (review.status === "done") {
     card.append(
