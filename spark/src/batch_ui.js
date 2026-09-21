@@ -22,15 +22,14 @@ function option(value, label) {
 }
 
 export function mountBatchUploader({ container, ready, originalIds, hasRecord, processPair, onSaved }) {
-  const card = element("section", "", "card");
+  const card = element("div");
   card.innerHTML = `
-    <div class="card-head"><h2>Batch upload SI and BL documents</h2><span class="badge">Private workspace</span></div>
-    <p class="muted">Select mixed PDF/TXT files, a mixed folder, or separate SI and BL folders. Matching shipment IDs in filenames are paired first; unclear files stay unprocessed until you pair them manually. TXT is read in your browser. PDFs go to Gemini only when you press Process. Files must be under 5 MB each.</p>
+    <p class="muted">Matching shipment IDs in filenames are paired first; unclear files stay unprocessed until you pair them manually. TXT is read in your browser. PDFs go to Gemini only when you press Process. Files must be under 5 MB each.</p>
     <div class="toolbar batch-inputs">
-      <label>Mixed files <input type="file" name="mixed_files" multiple accept=".pdf,.txt" /></label>
-      <label>Mixed folder <input type="file" name="mixed_folder" webkitdirectory multiple /></label>
-      <label>SI folder <input type="file" name="si_folder" webkitdirectory multiple /></label>
-      <label>BL folder <input type="file" name="bl_folder" webkitdirectory multiple /></label>
+      <label class="mixed-input">Mixed files <input type="file" name="mixed_files" multiple accept=".pdf,.txt" /></label>
+      <label class="mixed-input">Mixed folder <input type="file" name="mixed_folder" webkitdirectory multiple /></label>
+      <label class="folder-input hidden">SI folder <input type="file" name="si_folder" webkitdirectory multiple /></label>
+      <label class="folder-input hidden">BL folder <input type="file" name="bl_folder" webkitdirectory multiple /></label>
     </div>
     <div class="actions"><button type="button" class="small-btn primary" id="batch-preview-button">Preview pairs</button></div>
     <p id="batch-status" class="notice">No batch selected. Files stay in this browser; saved text and results go to private Firestore.</p>
@@ -52,6 +51,15 @@ export function mountBatchUploader({ container, ready, originalIds, hasRecord, p
   let plan = null;
   let busy = false;
   let pauseRequested = false;
+  let activeMode = "mixed";
+
+  window.addEventListener("seal-upload-mode", (event) => {
+    if (!['mixed', 'folders'].includes(event.detail)) return;
+    activeMode = event.detail;
+    const folders = event.detail === "folders";
+    card.querySelectorAll(".mixed-input").forEach((node) => node.classList.toggle("hidden", folders));
+    card.querySelectorAll(".folder-input").forEach((node) => node.classList.toggle("hidden", !folders));
+  });
 
   function status(message, error = false) {
     const slot = get("#batch-status");
@@ -60,11 +68,15 @@ export function mountBatchUploader({ container, ready, originalIds, hasRecord, p
   }
 
   function inputs() {
+    if (activeMode === "folders") {
+      return [
+        ...Array.from(get('[name="si_folder"]').files, (file) => ({ file, source: "si" })),
+        ...Array.from(get('[name="bl_folder"]').files, (file) => ({ file, source: "bl" })),
+      ];
+    }
     return [
       ...Array.from(get('[name="mixed_files"]').files, (file) => ({ file, source: "mixed" })),
       ...Array.from(get('[name="mixed_folder"]').files, (file) => ({ file, source: "mixed" })),
-      ...Array.from(get('[name="si_folder"]').files, (file) => ({ file, source: "si" })),
-      ...Array.from(get('[name="bl_folder"]').files, (file) => ({ file, source: "bl" })),
     ];
   }
 

@@ -28,9 +28,17 @@ function renderUploadCard() {
   const card = document.createElement("section");
   card.className = "card";
   card.innerHTML = `
-    <div class="card-head"><h2>Add a new email</h2><span class="badge">Spark demo</span></div>
-    <p class="muted">Use this form for a new email with SI and draft BL files. For documents from one of the original 520 emails, open that email and choose Reanalyze with Gemini. Files are sent to Gemini only when you select Analyze. Gemini's free tier may use submitted content to improve Google products.</p>
-    <form id="spark-form" class="toolbar">
+    <div class="card-head"><h2>Add emails and documents</h2><span class="badge">Private workspace</span></div>
+    <label class="filter-field">Upload type
+      <select id="upload-mode">
+        <option value="email">One email with SI and BL</option>
+        <option value="mixed">Mixed SI/BL files or folder</option>
+        <option value="folders">Separate SI and BL folders</option>
+      </select>
+    </label>
+    <div id="single-upload-panel">
+      <p class="muted">Add one email and its SI and draft BL. For documents from one of the original 520 emails, open that email and choose Reanalyze with Gemini. Files are sent to Gemini only when you select Analyze.</p>
+      <form id="spark-form" class="toolbar">
       <input name="from" type="email" aria-label="Sender email" placeholder="Sender email" required />
       <input name="to" type="email" aria-label="Recipient email" placeholder="Recipient email (optional)" />
       <input name="subject" aria-label="Email subject" placeholder="Email subject" required />
@@ -40,9 +48,10 @@ function renderUploadCard() {
       </label>
       <label>Shipping instruction <input name="si" type="file" accept=".pdf,.txt,application/pdf,text/plain" required /></label>
       <label>Draft BL <input name="bl" type="file" accept=".pdf,.txt,application/pdf,text/plain" required /></label>
-      <button class="small-btn primary" type="submit">Analyze with Gemini</button>
-    </form>
-    `;
+      <button class="small-btn primary" type="submit">Analyze and save</button>
+      </form>
+    </div>
+    <div id="batch-upload-slot" class="hidden"></div>`;
   document.getElementById("new-email-form-slot").append(card);
   document.getElementById("spark-auth").classList.remove("hidden");
   const signIn = document.createElement("button");
@@ -103,7 +112,7 @@ function renderUploadCard() {
     }
     const button = form.querySelector("button[type=submit]");
     button.disabled = true;
-    showStatus("Gemini is reading the SI and draft BL…");
+    showStatus("Reading the SI and draft BL…");
     try {
       const caseRecord = await analyzeFiles(subject, si, bl, null, emailMetadata);
       await saveRecord(caseRecord.email_id, { case: caseRecord, decision: null });
@@ -399,7 +408,7 @@ window.sparkRequest = request;
 window.sparkAttachmentUrl = (id, index) => uploadFiles.get(id)?.urls[Number(index)] || null;
 renderUploadCard();
 mountBatchUploader({
-  container: document.getElementById("new-email-form-slot"),
+  container: document.getElementById("batch-upload-slot"),
   ready: () => Boolean(database && model),
   originalIds: () => Object.keys(baseRecords),
   hasRecord: (id) => Boolean(records[id]),
@@ -416,6 +425,15 @@ mountBatchUploader({
   },
   onSaved: () => window.dispatchEvent(new Event("spark-case-added")),
 });
+const uploadMode = document.getElementById("upload-mode");
+function renderUploadMode() {
+  const single = uploadMode.value === "email";
+  document.getElementById("single-upload-panel").classList.toggle("hidden", !single);
+  document.getElementById("batch-upload-slot").classList.toggle("hidden", single);
+  window.dispatchEvent(new CustomEvent("seal-upload-mode", { detail: uploadMode.value }));
+}
+uploadMode.onchange = renderUploadMode;
+renderUploadMode();
 try {
   await connectFirebase();
 } catch (error) {
