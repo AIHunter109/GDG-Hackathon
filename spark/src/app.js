@@ -283,6 +283,10 @@ async function request(url, body) {
         (caseRecord.status !== "NEEDS_REVIEW" || existing.decision?.action !== "resolve")) {
       throw new Error("Only a completed human review can be reopened");
     }
+    if (body.action === "reopen_category" &&
+        (caseRecord.category === "BL_COMPARISON" || existing.decision?.action !== "complete_category")) {
+      throw new Error("Only a completed category task can be reopened");
+    }
     const { caseRecord: revised, corrections } = applyReview(caseRecord, body.action, body);
     const decision = { action: body.action, corrections, note: String(body.note || ""), updated_at: new Date().toISOString() };
     await saveRecord(id, { case: revised, decision });

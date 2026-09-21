@@ -107,6 +107,10 @@ export function applyReview(caseRecord, action, payload = {}) {
     corrections.field = field;
     return { caseRecord: recompare(result), corrections };
   }
+  if (["complete_category", "reopen_category"].includes(action)) {
+    if (result.category === "BL_COMPARISON") throw new Error("Document comparisons use verification review actions");
+    return { caseRecord: result, corrections };
+  }
   if (!["confirm", "resolve", "reopen"].includes(action)) throw new Error("Unknown reviewer action");
   return { caseRecord: result, corrections };
 }

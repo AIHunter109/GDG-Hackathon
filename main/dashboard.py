@@ -151,6 +151,13 @@ class Handler(BaseHTTPRequestHandler):
                 elif choice == "reopen":
                     if case.get("status") != "NEEDS_REVIEW" or store.list_decisions().get(email_id, {}).get("action") != "resolve":
                         raise ValueError("Only a completed human review can be reopened")
+                elif choice == "complete_category":
+                    if case.get("category") == "BL_COMPARISON":
+                        raise ValueError("Document comparisons use verification review actions")
+                elif choice == "reopen_category":
+                    if (case.get("category") == "BL_COMPARISON" or
+                            store.list_decisions().get(email_id, {}).get("action") != "complete_category"):
+                        raise ValueError("Only a completed category task can be reopened")
                 elif choice not in {"confirm", "resolve"}:
                     raise ValueError("Unknown reviewer action")
                 decision = store.save_decision(email_id, choice, payload.get("note", ""), corrections)

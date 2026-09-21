@@ -164,6 +164,35 @@ class WebWorkflowTests(unittest.TestCase):
             server.server_close()
             Handler.repository = previous
 
+    def test_non_comparison_workflow_can_be_completed_and_reopened(self):
+        previous = Handler.repository
+        Handler.repository = MemoryRepository()
+        Handler.repository.case["category"] = "INVOICE_QUERY"
+        Handler.repository.case["status"] = "OK"
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            def post(action):
+                request = urllib.request.Request(
+                    base + "/api/decision/email_demo",
+                    json.dumps({"action": action}).encode(),
+                    {"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(request) as response:
+                    return json.load(response)
+
+            self.assertEqual(post("complete_category")["decision"]["action"], "complete_category")
+            self.assertEqual(post("reopen_category")["decision"]["action"], "reopen_category")
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                post("reopen_category")
+            self.assertEqual(error.exception.code, 400)
+            error.exception.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            Handler.repository = previous
+
 
 if __name__ == "__main__":
     unittest.main()

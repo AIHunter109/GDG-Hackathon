@@ -30,7 +30,8 @@ class RaiseIssueToHuman:
                 "evidence": case.get("mismatches") or case.get("missing_fields") or case.get("error")}
 
     def resolve(self, email_id, action, *, note="", corrections=None):
-        allowed = {"confirm", "confirm_value", "correct", "mark_equivalent", "resolve", "reopen", "select_document"}
+        allowed = {"confirm", "confirm_value", "correct", "mark_equivalent", "resolve", "reopen",
+                   "select_document", "complete_category", "reopen_category"}
         if action not in allowed:
             raise ValueError(f"Unknown reviewer action: {action}")
         if action == "correct" and not corrections:

@@ -321,6 +321,14 @@
                 background: #e7f1fa;
                 color: #265b84;
             }
+            .badge.CATEGORY_PENDING {
+                background: #edf2ff;
+                color: #3f5d91;
+            }
+            .badge.CATEGORY_COMPLETED {
+                background: #e1f5eb;
+                color: #186b4b;
+            }
             .badge.BL_COMPARISON {
                 background: #e6f3fb;
                 color: #1a668b;
@@ -620,6 +628,11 @@
                     </section>
                 </div>
                 <section class="card">
+                    <div class="card-head"><h2>Other Email Workflows</h2></div>
+                    <div id="category-workflows" class="metrics performance-metrics"></div>
+                    <p class="muted">SI requests, invoice questions, general messages, and spam remain actionable. Select a card to open that queue.</p>
+                </section>
+                <section class="card">
                     <div class="card-head">
                         <h2>Emails</h2>
                         <span id="case-count" class="muted"></span>
@@ -649,7 +662,9 @@
                                 <option value="NEEDS_REVIEW">Human review required</option>
                                 <option value="RESOLVED_REVIEW">Human review completed</option>
                                 <option value="PROCESSING_FAILED">Processing failed</option>
-                                <option value="NOT_APPLICABLE">No SI/BL comparison required</option>
+                                <option value="CATEGORY_PENDING">Category action pending</option>
+                                <option value="CATEGORY_COMPLETED">Category action completed</option>
+                                <option value="NOT_APPLICABLE">Awaiting comparison documents</option>
                             </select>
                         </label>
                         <label class="filter-field">Date
@@ -676,7 +691,7 @@
                                 <tr>
                                     <th>Subject and sender</th>
                                     <th>Category</th>
-                                    <th>SI/BL verification status</th>
+                                    <th>Workflow status</th>
                                     <th>Attachments</th>
                                     <th>Updated</th>
                                     <th>Action</th>
@@ -698,7 +713,7 @@
                                 <tr>
                                     <th>Subject and sender</th>
                                     <th>Category</th>
-                                    <th>SI/BL verification status</th>
+                                    <th>Workflow status</th>
                                     <th>Attachments</th>
                                     <th>Updated</th>
                                     <th>Action</th>
@@ -735,7 +750,37 @@
                 NEEDS_REVIEW: "Human review required",
                 PROCESSING_FAILED: "Processing failed",
                 PROCESSING: "Processing",
-                NOT_APPLICABLE: "No SI/BL comparison required",
+                NOT_APPLICABLE: "Awaiting comparison documents",
+            };
+            const CATEGORY_WORKFLOW = {
+                SI_REQUEST: {
+                    pending: "SI response required",
+                    completed: "SI request handled",
+                    title: "Shipping instruction request",
+                    action: "Prepare or request the required shipping instruction and respond to the sender.",
+                    complete: "Mark SI request handled",
+                },
+                INVOICE_QUERY: {
+                    pending: "Finance follow-up required",
+                    completed: "Invoice query handled",
+                    title: "Invoice query",
+                    action: "Review the invoice or payment question and route it to the finance owner.",
+                    complete: "Mark invoice query handled",
+                },
+                GENERAL: {
+                    pending: "Message review required",
+                    completed: "General email handled",
+                    title: "General email",
+                    action: "Read the message, respond or forward it to the appropriate owner, then mark it handled.",
+                    complete: "Mark general email handled",
+                },
+                SPAM: {
+                    pending: "Spam confirmation required",
+                    completed: "Spam confirmed",
+                    title: "Spam review",
+                    action: "Confirm the classification before archiving or removing the message from the work queue.",
+                    complete: "Confirm spam and mark handled",
+                },
             };
             const $ = (id) => document.getElementById(id);
             const node = (tag, text = "", className = "") => {
@@ -798,13 +843,19 @@
             }
             function resultLabel(c) {
                 return c.category !== "BL_COMPARISON"
-                    ? "No SI/BL comparison required"
+                    ? state.decisions[c.email_id]?.action === "complete_category"
+                        ? CATEGORY_WORKFLOW[c.category]?.completed || "Email handled"
+                        : CATEGORY_WORKFLOW[c.category]?.pending || "Email action required"
                     : c.status === "NEEDS_REVIEW" &&
                         state.decisions[c.email_id]?.action === "resolve"
                       ? "Human review completed"
                       : LABEL[c.status] || "Processing";
             }
             function resultKey(c) {
+                if (c.category !== "BL_COMPARISON")
+                    return state.decisions[c.email_id]?.action === "complete_category"
+                        ? "CATEGORY_COMPLETED"
+                        : "CATEGORY_PENDING";
                 return c.category === "BL_COMPARISON" &&
                     c.status === "NEEDS_REVIEW" &&
                     state.decisions[c.email_id]?.action === "resolve"
@@ -1052,6 +1103,18 @@
                 $("review-reasons").replaceChildren(...Object.entries(reasons).map(([code, item]) =>
                     filterMetric(item.label, item.count, `reason:${code}`, { status: "NEEDS_REVIEW", reason: code })));
                 if (!Object.keys(reasons).length) $("review-reasons").append(metric("No active reviews", 0));
+                const workflowCards = Object.entries(CATEGORY_WORKFLOW).map(([category, config]) => {
+                    const categoryCases = cases.filter(([, c]) => c.category === category);
+                    const pending = categoryCases.filter(([id]) =>
+                        state.decisions[id]?.action !== "complete_category").length;
+                    return filterMetric(
+                        `${config.title} · ${pending} pending`,
+                        categoryCases.length,
+                        `category:${category}`,
+                        { category },
+                    );
+                });
+                $("category-workflows").replaceChildren(...workflowCards);
             }
             function visibleCases() {
                 const search = $("search").value.toLowerCase(),
@@ -1179,8 +1242,9 @@
                                     "secondary-text",
                                 ),
                             );
-                        const action =
-                            c.status === "PROCESSING_FAILED"
+                        const action = c.category !== "BL_COMPARISON"
+                            ? resultKey(c) === "CATEGORY_COMPLETED" ? "View" : "Handle"
+                            : c.status === "PROCESSING_FAILED"
                                 ? "Retry"
                                 : unresolved(id, c)
                                   ? "Review"
@@ -1392,7 +1456,9 @@
                     box.append(
                         node(
                             "p",
-                            "This email does not require an SI versus draft BL comparison.",
+                            state.decisions[id]?.action === "complete_category"
+                                ? "This category task has been completed. Reopen it if more follow-up is needed."
+                                : "Next action: " + CATEGORY_WORKFLOW[c.category].action,
                         ),
                     );
                 else if (c.status === "NOT_APPLICABLE")
@@ -1402,32 +1468,24 @@
                             "This thread is waiting for comparison documents. It will not enter human review until an SI and draft BL are expected.",
                         ),
                     );
-                box.append(
-                    add(
-                        node("dl"),
-                        summaryMeta("Sender", e.from),
-                        summaryMeta(
-                            "Classification",
-                            LABEL[c.category] || c.category,
-                        ),
-                        summaryMeta(
-                            "Updated",
-                            shortDate(latestUpdate(c, state.decisions[id])),
-                        ),
-                        summaryMeta(
-                            "Shipping Instruction",
-                            c.documents?.si?.split("/").pop() || "Unidentified",
-                        ),
-                        summaryMeta(
-                            "Draft BL",
-                            c.documents?.bl?.split("/").pop() || "Unidentified",
-                        ),
-                    ),
+                const summary = add(
+                    node("dl"),
+                    summaryMeta("Sender", e.from),
+                    summaryMeta("Classification", LABEL[c.category] || c.category),
+                    summaryMeta("Updated", shortDate(latestUpdate(c, state.decisions[id]))),
                 );
+                if (c.category === "BL_COMPARISON")
+                    summary.append(
+                        summaryMeta("Shipping Instruction", c.documents?.si?.split("/").pop() || "Unidentified"),
+                        summaryMeta("Draft BL", c.documents?.bl?.split("/").pop() || "Unidentified"),
+                    );
+                else summary.append(summaryMeta("Workflow", resultLabel(c)));
+                box.append(summary);
                 head.append(box);
                 area.append(head);
+                if (c.category !== "BL_COMPARISON") renderCategoryWorkflow(c, area);
                 renderProcessingMethod(c, area);
-                if (window.SPARK_MODE && state.features.ai_enabled)
+                if (c.category === "BL_COMPARISON" && window.SPARK_MODE && state.features.ai_enabled)
                     area.append(
                         add(
                             section("Reanalyze documents"),
@@ -1454,9 +1512,64 @@
                     renderComparison(c, area);
                 renderSource(c, e, area);
             }
+            function renderCategoryWorkflow(c, area) {
+                const config = CATEGORY_WORKFLOW[c.category],
+                    completed = state.decisions[c.email_id]?.action === "complete_category",
+                    panel = section(config.title),
+                    actions = node("div", "", "actions");
+                panel.append(
+                    node("p", completed ? config.completed : config.pending, "notice"),
+                    node("p", completed
+                        ? "The reviewer completed this category task. The original email remains available below."
+                        : config.action),
+                );
+                if (completed)
+                    actions.append(button("Reopen task", () => decision(c.email_id, "reopen_category"), "primary"));
+                else {
+                    if (c.category !== "SPAM")
+                        actions.append(button("Prepare response draft", () => showCategoryDraft(c, panel)));
+                    actions.append(button(config.complete, () => decision(c.email_id, "complete_category"), "primary"));
+                }
+                actions.append(button("View full email", openEmailSource));
+                panel.append(actions);
+                area.append(panel);
+            }
+            function showCategoryDraft(c, panel) {
+                const subject = c.email?.subject || c.email_id,
+                    drafts = {
+                        SI_REQUEST: `Subject: Re: ${subject}\n\nHello,\n\nWe are reviewing the shipping instruction request. Please provide any missing shipment details or documents so we can proceed.\n\nThank you.`,
+                        INVOICE_QUERY: `Subject: Re: ${subject}\n\nHello,\n\nWe have received your invoice or payment query and forwarded it to the finance team for review. We will follow up when the details are confirmed.\n\nThank you.`,
+                        GENERAL: `Subject: Re: ${subject}\n\nHello,\n\nThank you for your message. We have reviewed it and will route any required follow-up to the appropriate team.\n\nThank you.`,
+                    };
+                let slot = panel.querySelector(".category-draft");
+                if (!slot) {
+                    slot = node("pre", "", "draft category-draft");
+                    panel.append(slot);
+                }
+                slot.textContent = drafts[c.category] || "";
+            }
+            function openEmailSource() {
+                const details = $("email-details");
+                if (!details) return;
+                details.open = true;
+                details.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
             function renderProcessingMethod(c, area) {
                 const panel = section("Processing method"),
                     list = node("ul", "", "muted");
+                if (c.category !== "BL_COMPARISON") {
+                    list.append(
+                        node("li", "Email classification: deterministic rules with validated Gemini fallback when intent is uncertain."),
+                        node("li", `Workflow routing: ${LABEL[c.category] || c.category} queue.`),
+                        node("li", "Final handling: a reviewer reads, responds, routes, or confirms the message and records completion."),
+                    );
+                    panel.append(
+                        node("p", "Email → Classification → Category workflow → Reviewer action → Completed", "notice"),
+                        list,
+                    );
+                    area.append(panel);
+                    return;
+                }
                 [
                     "Email classification: deterministic rules with validated Gemini fallback when intent is uncertain.",
                     "Document extraction: native parsing first; Gemini Vision/OCR can assist scanned PDFs when requested.",
@@ -1930,6 +2043,7 @@
                 const grid = node("div", "", "detail-grid"),
                     mail = node("section", "", "card"),
                     mailDetails = node("details");
+                mailDetails.id = "email-details";
                 mailDetails.append(
                     node("summary", "Full email"),
                     add(

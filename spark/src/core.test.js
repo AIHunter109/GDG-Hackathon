@@ -63,6 +63,16 @@ test("dashboard document-check totals exclude non-comparison email", () => {
   assert.equal(metrics.mismatches, 1);
 });
 
+test("non-comparison categories support completion without changing verification data", () => {
+  const general = { email_id: "general", category: "GENERAL", status: "OK" };
+  const completed = applyReview(general, "complete_category");
+  assert.deepEqual(completed.caseRecord, general);
+  assert.throws(
+    () => applyReview(syntheticCases().demo_match.case, "complete_category"),
+    /verification review actions/,
+  );
+});
+
 test("analysis of bundle documents stays linked without increasing email count", () => {
   const originals = { email_013: { case: { email_id: "email_013", category: "BL_COMPARISON", status: "MISMATCH" } } };
   const uploaded = { case: { email_id: "upload_1789944385211", category: "BL_COMPARISON", status: "NEEDS_REVIEW",
