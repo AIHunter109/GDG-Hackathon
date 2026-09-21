@@ -1592,6 +1592,7 @@
                 box.append(summary);
                 head.append(box);
                 area.append(head);
+                renderCaseManagement(c, area);
                 if (c.category !== "BL_COMPARISON") renderCategoryWorkflow(c, area);
                 renderProcessingMethod(c, area);
                 if (c.category === "BL_COMPARISON" && window.SPARK_MODE && state.features.ai_enabled)
@@ -1620,6 +1621,79 @@
                 )
                     renderComparison(c, area);
                 renderSource(c, e, area);
+            }
+            function caseReport(c) {
+                const e = c.email || {}, decisionRecord = state.decisions[c.email_id] || {};
+                const lines = [
+                    "SEAL Verification Report", `Case: ${c.email_id}`, `Subject: ${e.subject || ""}`,
+                    `Category: ${LABEL[c.category] || c.category}`, `Result: ${resultLabel(c)}`,
+                    `Updated: ${latestUpdate(c, decisionRecord) || ""}`, "",
+                ];
+                if (c.category === "BL_COMPARISON") {
+                    lines.push("Seven-field comparison");
+                    for (const field of FIELDS) {
+                        const si = c.si_fields?.[field], bl = c.bl_fields?.[field];
+                        lines.push(`${prettyField(field)}: SI=${si?.raw_value ?? "Missing"} | Draft BL=${bl?.raw_value ?? "Missing"} | ${fieldResult(si, bl)[0]}`);
+                        for (const [role, value] of [["SI", si], ["Draft BL", bl]]) if (value)
+                            lines.push(`  ${role} evidence: document=${value.source || c.documents?.[role === "SI" ? "si" : "bl"] || "Unknown"}; page=${value.page || "N/A"}; method=${value.method || "native"}; text=${value.source_text || value.raw_value || "Unavailable"}`);
+                    }
+                    lines.push("", `Discrepancies: ${(c.mismatches || []).length}`);
+                }
+                const assignment = decisionRecord.assignment || {};
+                lines.push(`Reviewer: ${assignment.reviewer || "Unassigned"}`, `Priority: ${assignment.priority || "Normal"}`, `Due: ${assignment.due || "Not set"}`);
+                if (decisionRecord.feedback)
+                    lines.push(`Feedback: ${decisionRecord.feedback.outcome}; cause=${decisionRecord.feedback.cause}; ${decisionRecord.feedback.comment || ""}`);
+                return lines.join("\n");
+            }
+            function downloadText(filename, text, type = "text/plain") {
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(new Blob([text], { type }));
+                link.download = filename;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            }
+            function renderCaseManagement(c, area) {
+                const saved = state.decisions[c.email_id] || {}, panel = section("Case management");
+                const assignment = saved.assignment || {}, assignmentRow = node("div", "", "toolbar");
+                const reviewer = node("input"), priority = node("select"), due = node("input");
+                reviewer.placeholder = "Reviewer name"; reviewer.value = assignment.reviewer || "";
+                for (const value of ["low", "normal", "high", "urgent"]) {
+                    const optionNode = node("option", value[0].toUpperCase() + value.slice(1)); optionNode.value = value; priority.append(optionNode);
+                }
+                priority.value = assignment.priority || "normal"; due.type = "date"; due.value = assignment.due || "";
+                assignmentRow.append(
+                    add(node("label", "Reviewer ", "filter-field"), reviewer),
+                    add(node("label", "Priority ", "filter-field"), priority),
+                    add(node("label", "Due date ", "filter-field"), due),
+                    button("Save assignment", () => decision(c.email_id, "update_assignment", { reviewer: reviewer.value, priority: priority.value, due: due.value }), "small-btn primary"),
+                );
+                const feedback = saved.feedback || {}, feedbackRow = node("div", "", "toolbar"), outcome = node("select"), cause = node("select"), comment = node("input");
+                [["accepted", "Accepted"], ["corrected", "Corrected"]].forEach(([value, label]) => { const optionNode = node("option", label); optionNode.value = value; outcome.append(optionNode); });
+                [["none", "No issue"], ["classification", "Classification"], ["extraction", "Extraction"], ["comparison", "Comparison"], ["other", "Other"]].forEach(([value, label]) => { const optionNode = node("option", label); optionNode.value = value; cause.append(optionNode); });
+                outcome.value = feedback.outcome || "accepted"; cause.value = feedback.cause || "none"; comment.placeholder = "Optional feedback note"; comment.value = feedback.comment || "";
+                feedbackRow.append(
+                    add(node("label", "Result ", "filter-field"), outcome),
+                    add(node("label", "Issue source ", "filter-field"), cause),
+                    add(node("label", "Comment ", "filter-field"), comment),
+                    button("Save feedback", () => decision(c.email_id, "reviewer_feedback", { outcome: outcome.value, cause: cause.value, comment: comment.value }), "small-btn"),
+                );
+                panel.append(
+                    node("h3", "Assignment"), assignmentRow,
+                    node("h3", "Reviewer feedback"), feedbackRow,
+                    add(node("div", "", "actions"), button("Download verification report", () => downloadText(`SEAL-${c.email_id}-report.txt`, caseReport(c)), "primary")),
+                );
+                const events = saved.activity || [];
+                const baseline = [
+                    `Classified as ${LABEL[c.category] || c.category}`,
+                    c.category === "BL_COMPARISON" ? "Documents identified and fields extracted" : "Routed to category workflow",
+                    `Result recorded: ${resultLabel(c)}`,
+                ];
+                const history = node("details"); history.append(node("summary", `Activity history (${baseline.length + events.length})`));
+                const list = node("ol", "", "muted");
+                for (const event of [...events].reverse())
+                    list.append(node("li", `${shortDate(event.at)} · ${String(event.action || "update").replaceAll("_", " ")}${event.note ? " · " + event.note : ""}`));
+                for (const event of baseline.reverse()) list.append(node("li", `${shortDate(c.updated_at)} · ${event}`));
+                history.append(list); panel.append(history); area.append(panel);
             }
             function renderCategoryWorkflow(c, area) {
                 const { config, workflowState, label, guidance } = categoryWorkflowInfo(c),
@@ -1732,6 +1806,16 @@
                             "sub",
                         ),
                     );
+                td.append(
+                    node(
+                        "span",
+                        `Evidence: ${f.source || "Unknown document"}` +
+                            (f.page ? ` · page ${f.page}` : "") +
+                            ` · ${f.method || "native extraction"}` +
+                            (f.source_text ? ` · “${f.source_text}”` : ""),
+                        "sub",
+                    ),
+                );
                 if (f.confidence < 0.9)
                     td.append(
                         node(

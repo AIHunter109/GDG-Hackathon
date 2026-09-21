@@ -31,13 +31,24 @@ class RaiseIssueToHuman:
 
     def resolve(self, email_id, action, *, note="", corrections=None):
         allowed = {"confirm", "confirm_value", "correct", "mark_equivalent", "resolve", "reopen",
-                   "select_document", "complete_category", "reopen_category", "update_category_workflow"}
+                   "select_document", "complete_category", "reopen_category", "update_category_workflow",
+                   "update_assignment", "reviewer_feedback"}
         if action not in allowed:
             raise ValueError(f"Unknown reviewer action: {action}")
         if action == "correct" and not corrections:
             raise ValueError("Corrections are required for the correct action")
         decisions = self._read()
-        decisions[email_id] = {"action": action, "note": note, "corrections": corrections or {},
-                               "updated_at": datetime.now(timezone.utc).isoformat()}
+        existing = decisions.get(email_id, {})
+        updated_at = datetime.now(timezone.utc).isoformat()
+        event = {"action": action, "note": note, "details": corrections or {}, "at": updated_at}
+        decision = {**existing, "updated_at": updated_at,
+                    "activity": [*existing.get("activity", []), event][-100:]}
+        if action == "update_assignment":
+            decision["assignment"] = corrections or {}
+        elif action == "reviewer_feedback":
+            decision["feedback"] = corrections or {}
+        else:
+            decision.update({"action": action, "note": note, "corrections": corrections or {}})
+        decisions[email_id] = decision
         self.path.write_text(json.dumps(decisions, indent=2), encoding="utf-8")
         return decisions[email_id]

@@ -30,6 +30,10 @@ The seven verified fields are:
 - **Batch safety:** previews pairs before processing, leaves unclear files unprocessed for manual pairing, handles 1–10 pairs per run, pauses after the current pair, retries failures, and skips a saved pair with the same pairing key, filenames, sizes, and modified timestamps.
 - **Visible AI and cloud integration:** the workspace states where Gemini assists uncertain extraction or OCR, where deterministic rules make the final decision, and where Firebase Authentication and Firestore protect reviewer data.
 - **Private cloud demo:** Firebase Authentication and Firestore rules restrict the original dataset to the verified project owner. The public Hosting files contain no original email data or attachment binaries.
+- **Verification reports:** Case Detail downloads a human-readable report with the seven-field comparison, discrepancies, decision, assignment, feedback, and field evidence.
+- **Evidence provenance:** each extracted field shows its source document, page when available, extraction method, and supporting text.
+- **Activity and ownership:** Case Detail records workflow events and supports reviewer, priority, due-date, and accepted-or-corrected feedback fields without changing the original source.
+- **Batch summaries:** each processing run reports result totals and can download a CSV handover summary identified by case ID.
 
 ### Status meanings
 
@@ -168,19 +172,6 @@ To inspect why cases enter review, generate a diagnostic report. Supplying groun
 ```
 
 The current 520-email evaluation produces 20 reviews for 20 expected cases: five wrong-document cases, five missing-attachment cases, five unreadable cases, and five missing-value cases. It reports zero false reviews and zero missed reviews while retaining 100% category accuracy and exact mismatch results against the included ground truth. These figures are specific to the supplied validation dataset and are not presented as guaranteed performance on unseen production data.
-
-### Planned next improvements
-
-The current prototype covers the core verification workflow. These additions are planned to strengthen traceability, practical use, and reviewer confidence without changing the deterministic verification approach:
-
-- **Downloadable verification report:** generate a human-readable case report containing the email or shipment reference, seven-field comparison, discrepancies, reviewer status, and final decision. JSON remains the competition output.
-- **Field-level evidence and provenance:** show each extracted value's document, page when available, extraction method, and supporting source text. AI-derived values remain evidence checked and enter human review when uncertain.
-- **Case activity history:** record classification, document-role detection, extraction, mismatch detection, reviewer corrections, re-verification, review completion, and correction-draft creation without modifying the original source.
-- **Batch result summary:** show processed pairs, no-mismatch cases, mismatches, human-review cases, and failures after a batch, with links to affected cases and an optional downloadable handover summary.
-- **Reviewer feedback capture:** record whether a result was accepted or corrected and whether the issue involved classification, extraction, comparison, or another cause. Feedback is not presented as model accuracy without independently labelled evaluation data.
-- **Optional reviewer assignment:** add ownership, priority, and due status in a later multi-user version. This is a scalability enhancement for the current owner-restricted demo.
-
-These items are planned and must not be described as implemented until they are available and tested in the prototype.
 
 ### Demo highlights
 

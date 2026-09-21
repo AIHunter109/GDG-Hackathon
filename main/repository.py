@@ -107,11 +107,23 @@ class CloudRepository:
     def save_decision(self, email_id, action, note="", corrections=None):
         from datetime import datetime, timezone
         if action not in {"confirm", "confirm_value", "correct", "mark_equivalent", "resolve", "reopen",
-                          "select_document", "complete_category", "reopen_category", "update_category_workflow"}:
+                          "select_document", "complete_category", "reopen_category", "update_category_workflow",
+                          "update_assignment", "reviewer_feedback"}:
             raise ValueError("Unknown reviewer action")
-        decision = {"action": action, "note": note, "corrections": corrections or {},
-                    "updated_at": datetime.now(timezone.utc).isoformat()}
-        self.collection.document(email_id).set({"decision": decision}, merge=True)
+        ref = self.collection.document(email_id)
+        snapshot = ref.get()
+        existing = (snapshot.to_dict() or {}).get("decision", {}) if snapshot.exists else {}
+        updated_at = datetime.now(timezone.utc).isoformat()
+        event = {"action": action, "note": note, "details": corrections or {}, "at": updated_at}
+        decision = {**existing, "updated_at": updated_at,
+                    "activity": [*existing.get("activity", []), event][-100:]}
+        if action == "update_assignment":
+            decision["assignment"] = corrections or {}
+        elif action == "reviewer_feedback":
+            decision["feedback"] = corrections or {}
+        else:
+            decision.update({"action": action, "note": note, "corrections": corrections or {}})
+        ref.set({"decision": decision}, merge=True)
         return decision
 
     def save_case(self, email_id, case, submission):

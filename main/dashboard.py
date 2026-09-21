@@ -169,6 +169,20 @@ class Handler(BaseHTTPRequestHandler):
                     if (case.get("category") == "BL_COMPARISON" or
                             store.list_decisions().get(email_id, {}).get("action") != "complete_category"):
                         raise ValueError("Only a completed category task can be reopened")
+                elif choice == "update_assignment":
+                    priority = payload.get("priority", "normal")
+                    if priority not in {"low", "normal", "high", "urgent"}:
+                        raise ValueError("Choose a valid priority")
+                    corrections = {"reviewer": str(payload.get("reviewer", ""))[:120],
+                                   "priority": priority, "due": str(payload.get("due", ""))[:10]}
+                elif choice == "reviewer_feedback":
+                    outcome, cause = payload.get("outcome"), payload.get("cause")
+                    if outcome not in {"accepted", "corrected"}:
+                        raise ValueError("Choose whether the result was accepted or corrected")
+                    if cause not in {"classification", "extraction", "comparison", "other", "none"}:
+                        raise ValueError("Choose a valid feedback cause")
+                    corrections = {"outcome": outcome, "cause": cause,
+                                   "comment": str(payload.get("comment", ""))[:1000]}
                 elif choice not in {"confirm", "resolve"}:
                     raise ValueError("Unknown reviewer action")
                 decision = store.save_decision(email_id, choice, payload.get("note", ""), corrections)

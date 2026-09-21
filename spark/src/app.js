@@ -287,8 +287,24 @@ async function request(url, body) {
         (caseRecord.category === "BL_COMPARISON" || existing.decision?.action !== "complete_category")) {
       throw new Error("Only a completed category task can be reopened");
     }
-    const { caseRecord: revised, corrections } = applyReview(caseRecord, body.action, body);
-    const decision = { action: body.action, corrections, note: String(body.note || ""), updated_at: new Date().toISOString() };
+    const updatedAt = new Date().toISOString();
+    const prior = existing.decision || {};
+    let revised = caseRecord;
+    let corrections = {};
+    if (body.action === "update_assignment") {
+      if (!["low", "normal", "high", "urgent"].includes(body.priority)) throw new Error("Choose a valid priority");
+      corrections = { reviewer: String(body.reviewer || "").slice(0, 120), priority: body.priority,
+        due: String(body.due || "").slice(0, 10) };
+    } else if (body.action === "reviewer_feedback") {
+      if (!["accepted", "corrected"].includes(body.outcome)) throw new Error("Choose whether the result was accepted or corrected");
+      if (!["classification", "extraction", "comparison", "other", "none"].includes(body.cause)) throw new Error("Choose a valid feedback cause");
+      corrections = { outcome: body.outcome, cause: body.cause, comment: String(body.comment || "").slice(0, 1000) };
+    } else ({ caseRecord: revised, corrections } = applyReview(caseRecord, body.action, body));
+    const event = { action: body.action, note: String(body.note || ""), details: corrections, at: updatedAt };
+    const decision = { ...prior, updated_at: updatedAt, activity: [...(prior.activity || []), event].slice(-100) };
+    if (body.action === "update_assignment") decision.assignment = corrections;
+    else if (body.action === "reviewer_feedback") decision.feedback = corrections;
+    else Object.assign(decision, { action: body.action, corrections, note: String(body.note || "") });
     await saveRecord(id, { case: revised, decision });
     return { case: revised, decision };
   }
@@ -444,6 +460,7 @@ mountBatchUploader({
     caseRecord.batch_import = { pairing_key: pair.key,
       si_file: pair.si.path, bl_file: pair.bl.path };
     await saveRecord(id, { case: caseRecord, decision: null });
+    return caseRecord;
   },
   onSaved: () => window.dispatchEvent(new Event("spark-case-added")),
 });

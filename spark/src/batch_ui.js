@@ -33,6 +33,7 @@ export function mountBatchUploader({ container, ready, originalIds, hasRecord, p
     </div>
     <div class="actions"><button type="button" class="small-btn primary" id="batch-preview-button">Preview pairs</button></div>
     <p id="batch-status" class="notice">No batch selected. Files stay in this browser; saved text and results go to private Firestore.</p>
+    <div id="batch-result-summary" class="notice hidden"></div>
     <div id="batch-preview" class="hidden">
       <p id="batch-counts" class="muted"></p>
       <div class="table-scroll"><table class="master"><thead><tr><th>Shipment ID</th><th>SI file</th><th>BL file</th><th>Status</th></tr></thead><tbody id="batch-pairs"></tbody></table></div>
@@ -43,6 +44,7 @@ export function mountBatchUploader({ container, ready, originalIds, hasRecord, p
         <button type="button" class="small-btn primary" id="batch-process">Process next pairs</button>
         <button type="button" class="small-btn" id="batch-pause" disabled>Pause after current pair</button>
         <button type="button" class="small-btn" id="batch-retry-failed">Retry failed pairs</button>
+        <button type="button" class="small-btn hidden" id="batch-download-summary">Download run summary</button>
       </div>
     </div>`;
   container.append(card);
@@ -51,6 +53,7 @@ export function mountBatchUploader({ container, ready, originalIds, hasRecord, p
   let plan = null;
   let busy = false;
   let pauseRequested = false;
+  let runResults = [];
   let activeMode = "mixed";
 
   window.addEventListener("seal-upload-mode", (event) => {
@@ -204,6 +207,7 @@ export function mountBatchUploader({ container, ready, originalIds, hasRecord, p
     if (!next.length) return;
     busy = true;
     pauseRequested = false;
+    runResults = [];
     render();
     let saved = 0;
     for (const pair of next) {
@@ -212,8 +216,9 @@ export function mountBatchUploader({ container, ready, originalIds, hasRecord, p
       status(`Processing ${pair.key} (${saved + 1} of ${next.length} this run). TXT stays local; PDFs are sent to Gemini.`);
       render();
       try {
-        await processPair(pair, pair.id);
+        const result = await processPair(pair, pair.id);
         pair.status = "saved";
+        runResults.push({ id: pair.id, key: pair.key, status: result?.status || "SAVED" });
         saved += 1;
       } catch (error) {
         pair.status = "failed";
@@ -225,10 +230,30 @@ export function mountBatchUploader({ container, ready, originalIds, hasRecord, p
     }
     busy = false;
     render();
+    const totals = runResults.reduce((result, item) => {
+      result[item.status] = (result[item.status] || 0) + 1;
+      return result;
+    }, {});
+    if (runResults.length) {
+      const summary = get("#batch-result-summary");
+      summary.classList.remove("hidden");
+      summary.textContent = `${runResults.length} processed · ${totals.OK || 0} no mismatch · ${totals.MISMATCH || 0} mismatch · ${totals.NEEDS_REVIEW || 0} human review · ${totals.PROCESSING_FAILED || 0} failed.`;
+      get("#batch-download-summary").classList.remove("hidden");
+    }
     if (saved) onSaved();
     if (!plan.pairs.some((pair) => pair.status === "failed")) {
       status(`${saved} pair${saved === 1 ? "" : "s"} saved in this run. Continue with the next group when ready.`);
     }
+  };
+
+  get("#batch-download-summary").onclick = () => {
+    const csv = ["case_id,pairing_key,result", ...runResults.map((item) =>
+      [item.id, item.key, item.status].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))].join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    link.download = `SEAL-batch-summary-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   };
 
   get("#batch-pause").onclick = () => {

@@ -3,6 +3,7 @@
 import json
 import sys
 import threading
+import tempfile
 import unittest
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -13,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from comparator import compare_documents
 from dashboard import Handler
 from extractor import extract_fields
+from call_for_help import RaiseIssueToHuman
 
 
 class MemoryRepository:
@@ -58,6 +60,20 @@ class MemoryRepository:
 
 
 class WebWorkflowTests(unittest.TestCase):
+    def test_assignment_and_feedback_preserve_operational_decision_and_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            decisions = RaiseIssueToHuman(Path(directory) / "decisions.json")
+            decisions.resolve("email_demo", "confirm", note="Mismatch checked")
+            decisions.resolve("email_demo", "update_assignment", corrections={
+                "reviewer": "Alex", "priority": "high", "due": "2026-09-25"})
+            result = decisions.resolve("email_demo", "reviewer_feedback", corrections={
+                "outcome": "corrected", "cause": "extraction", "comment": "Weight fixed"})
+            self.assertEqual(result["action"], "confirm")
+            self.assertEqual(result["assignment"]["reviewer"], "Alex")
+            self.assertEqual(result["feedback"]["cause"], "extraction")
+            self.assertEqual([item["action"] for item in result["activity"]],
+                             ["confirm", "update_assignment", "reviewer_feedback"])
+
     def test_inbox_preview_and_reviewer_correction(self):
         previous = Handler.repository
         Handler.repository = MemoryRepository()
