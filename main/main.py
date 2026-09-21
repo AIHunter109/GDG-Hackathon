@@ -8,6 +8,7 @@ import sys
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -25,6 +26,18 @@ from extractor import (
 from inbox import Inbox
 
 LOG = logging.getLogger(__name__)
+
+# A request to *prepare and send* a draft BL later ("please assist to send
+# the draft BL for X for checking asap") has nothing attached yet by design
+# -- that is normal, not a defect. Only escalate a zero-attachment message
+# when it says something that was expected is actually missing/lost, e.g.
+# "attachments appear to have been dropped".
+_ATTACHMENT_ANOMALY_RE = re.compile(
+    r"attachments?\b.{0,40}\b(?:dropped|missing|lost|not attached)|"
+    r"forgot to attach|failed to attach|unable to attach|"
+    r"draft bl is (?:still )?missing",
+    re.I,
+)
 
 
 def _submission_record(category, status="OK", fields=(), reason=None):
@@ -101,12 +114,18 @@ def process_email(email, inbox, role_override=None, *, force_vision=False):
         return _submission_record(category), case
     paths = email.get("attachments", [])
     if not paths:
-        case.update(
-            status="NEEDS_REVIEW",
-            review_reason="missing_attachment",
-            internal_reason="MISSING_SI_AND_BL",
-        )
-        return _review_record(category, case, "missing_attachment")
+        if _ATTACHMENT_ANOMALY_RE.search(email.get("body", "")):
+            case.update(
+                status="NEEDS_REVIEW",
+                review_reason="missing_attachment",
+                internal_reason="MISSING_SI_AND_BL",
+            )
+            return _review_record(category, case, "missing_attachment")
+        # A plain forward-looking ask with nothing attached yet: there is
+        # nothing to compare, and nothing has gone wrong, so this resolves
+        # cleanly rather than sitting in the review queue.
+        case["status"] = "OK"
+        return _submission_record(category), case
     processing_step = "Reading attachments"
     try:
         documents = []
@@ -232,7 +251,7 @@ def process_email(email, inbox, role_override=None, *, force_vision=False):
         status = "MISMATCH" if fields else "OK"
         case["status"] = status
         return _submission_record(category, status, fields), case
-    except (ValueError, UnicodeError, zipfile.BadZipFile) as exc:
+    except (ValueError, UnicodeError, zipfile.BadZipFile, ET.ParseError) as exc:
         LOG.warning("Unreadable document in %s: %s", eid, exc)
         case.update(
             status="NEEDS_REVIEW",

@@ -13,6 +13,12 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+STATIC_DIR = Path(__file__).parent / "dashboard"
+STATIC_ASSETS = {
+    "style.css": "text/css",
+    "dashboard.js": "application/javascript",
+}
+
 from ai_service import AIService
 from call_for_help import draft_correction_email
 from comparator import FIELDS
@@ -158,6 +164,12 @@ class Handler(BaseHTTPRequestHandler):
                 )
             if parts == ["healthz"]:
                 return self._send(200, {"ok": True})
+            if len(parts) == 1 and parts[0] in STATIC_ASSETS:
+                return self._send(
+                    200,
+                    (STATIC_DIR / parts[0]).read_text(encoding="utf-8"),
+                    STATIC_ASSETS[parts[0]],
+                )
             if parts == ["api", "cases"]:
                 cases = self.store().list_cases()
                 decisions = self.store().list_decisions()
