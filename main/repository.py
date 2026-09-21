@@ -68,6 +68,18 @@ class LocalRepository:
             cases[email_id] = _stamp({**case, "status": "PROCESSING", "processing_step": step})
             self.evidence_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
 
+    def update_ai_review(self, email_id, ai_review):
+        """Merge the background AI review worker's result into a case without
+        touching the case's own `updated_at` -- that field drives
+        reviewer-facing "last updated" sorting and shouldn't move just
+        because a background job looked at the case."""
+        with self._lock:
+            cases = self.list_cases()
+            if email_id not in cases:
+                return
+            cases[email_id] = {**cases[email_id], "ai_review": ai_review}
+            self.evidence_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
+
 
 class CloudRepository:
     """Firestore holds case state; GCS holds original attachments."""
@@ -182,6 +194,9 @@ class CloudRepository:
     def save_processing(self, email_id, case, step="Retrying document verification"):
         processing = _stamp({**case, "status": "PROCESSING", "processing_step": step})
         self.collection.document(email_id).set({"case": processing}, merge=True)
+
+    def update_ai_review(self, email_id, ai_review):
+        self.collection.document(email_id).set({"case": {"ai_review": ai_review}}, merge=True)
 
 
 def get_repository():

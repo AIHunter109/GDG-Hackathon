@@ -81,6 +81,35 @@ class PipelineTests(unittest.TestCase):
         ai._json = lambda prompt, **kwargs: {"explanation": "x", "action": "Confirm"}
         self.assertIsNone(ai.explain_review(case))
 
+    def test_ai_review_case_requires_verbatim_proof(self):
+        ai = AIService(api_key="test")
+        case = {
+            "status": "NEEDS_REVIEW",
+            "internal_reason": "LOW_EXTRACTION_CONFIDENCE",
+            "uncertain_fields": ["gross_weight_kg"],
+            "bl_fields": {
+                "gross_weight_kg": {
+                    "raw_value": "400 KG",
+                    "source_text": "Gross Weight: 400 KG",
+                    "confidence": 0.6,
+                }
+            },
+        }
+        ai._json = lambda prompt, **kwargs: {
+            "assessment": "The BL's gross weight was extracted with low confidence.",
+            "proof": "Gross Weight: 400 KG",
+            "recommended_action": "Confirm the weight against the source document.",
+        }
+        result = ai.review_case(case)
+        self.assertEqual(result["proof"], "Gross Weight: 400 KG")
+        self.assertEqual(case["status"], "NEEDS_REVIEW")
+        ai._json = lambda prompt, **kwargs: {
+            "assessment": "The BL's gross weight was extracted with low confidence.",
+            "proof": "The document clearly states four hundred kilograms.",
+            "recommended_action": "Confirm the weight against the source document.",
+        }
+        self.assertIsNone(ai.review_case(case))
+
     def test_ai_draft_uses_confirmed_values_only(self):
         ai = AIService(api_key="test")
         case = {

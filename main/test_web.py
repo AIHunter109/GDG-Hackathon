@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from call_for_help import RaiseIssueToHuman
 from comparator import compare_documents
-from dashboard import Handler
+from dashboard import Handler, _needs_ai_review, _process_ai_review
 from extractor import extract_fields
 
 
@@ -76,6 +76,9 @@ class MemoryRepository:
             "corrections": corrections or {},
         }
         return self.decision[email_id]
+
+    def update_ai_review(self, email_id, ai_review):
+        self.case = {**self.case, "ai_review": ai_review}
 
 
 class WebWorkflowTests(unittest.TestCase):
@@ -337,6 +340,42 @@ class WebWorkflowTests(unittest.TestCase):
                 post("update_category_workflow", "forwarded_to_owner")
             self.assertEqual(error.exception.code, 400)
             error.exception.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            Handler.repository = previous
+
+    def test_ai_review_worker_fills_in_pending_case_and_is_visible_via_api(self):
+        class StubAI:
+            enabled = True
+
+            def review_case(self, case):
+                return {
+                    "assessment": "The gross weight could not be confirmed automatically.",
+                    "proof": "Gross Weight: 400 KG",
+                    "recommended_action": "Confirm the value against the source document.",
+                }
+
+        previous = Handler.repository
+        Handler.repository = MemoryRepository()
+        Handler.repository.case["status"] = "NEEDS_REVIEW"
+        Handler.repository.case["uncertain_fields"] = ["gross_weight_kg"]
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            store = Handler.repository
+            case = store.get_case("email_demo")
+            decisions = store.list_decisions()
+            self.assertTrue(_needs_ai_review(case, decisions, "email_demo"))
+            _process_ai_review(store, StubAI(), "email_demo", case)
+            with urllib.request.urlopen(base + "/api/cases") as response:
+                ai_review = json.load(response)["cases"]["email_demo"]["ai_review"]
+            self.assertEqual(ai_review["status"], "done")
+            self.assertEqual(ai_review["proof"], "Gross Weight: 400 KG")
+            refreshed = store.get_case("email_demo")
+            self.assertFalse(_needs_ai_review(refreshed, decisions, "email_demo"))
         finally:
             server.shutdown()
             server.server_close()

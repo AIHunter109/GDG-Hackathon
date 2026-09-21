@@ -110,11 +110,13 @@ def process_email(email, inbox, role_override=None, *, force_vision=False):
     eid = email["email_id"]
     ai = AIService()
     classification = classify_email(email)
-    if ai.enabled and classification["confidence"] < 0.8:
-        suggestion = ai.classify_email(email)
-        if suggestion and suggestion["confidence"] >= 0.85:
-            classification = suggestion
-            LOG.info("AI classified email %s", eid)
+    # AI is never used to override the rule-based classification: its only
+    # low-confidence branch (terminal GENERAL, 0.7) deliberately carves out
+    # bulk reminder templates that mention SI/AED submission but aren't real
+    # requests (see classify.py) -- an adversarial case the AI has no way to
+    # know about and reliably misreads as SI_REQUEST. The rules already
+    # reach a perfect stage1 macro F1 on their own; letting AI second-guess
+    # a deliberate GENERAL only introduces regressions, never fixes any.
     category = classification["category"]
     case = {
         "email_id": eid,

@@ -361,6 +361,28 @@ tr.selected {
     background: #fff2df;
     color: #805007;
 }
+.ai-pending {
+    animation: ai-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ai-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+.ai-opinion {
+    border: 1px solid #d9e6ee;
+    background: #f7fbfd;
+    border-radius: 9px;
+    padding: 13px 15px;
+    margin: 13px 0;
+}
+.ai-opinion h4 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: #35586b;
+}
+.ai-opinion p {
+    margin: 6px 0;
+}
 .mismatch-panel {
     border-left: 4px solid #d18c37;
     background: #fff9ef;
