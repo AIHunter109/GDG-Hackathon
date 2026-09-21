@@ -17,14 +17,17 @@ The seven verified fields are:
 - **Email classification:** separates document comparisons, SI requests, invoice queries, general email, and spam.
 - **Document processing:** reads TXT, XLSX, DOCX, and PDF in the Python pipeline. Native extraction runs first; Gemini is used only for uncertain intent, ambiguous document roles, unfamiliar labels, image-only PDFs, requested review explanations, and optional correction-email wording.
 - **Deterministic verification:** normalizes the seven fields, checks shipment identifiers and document totals, then reports no mismatch, mismatch, human review, processing, or processing failure. AI does not make the final comparison decision.
-- **Reviewer workspace:** shows dashboard totals, a validation summary, combined search/category/status/date filters, case-distribution and human-review summaries, the 520 source emails, attachment counts, and a separate history for new submissions.
-- **Validation results:** presents dataset-specific evidence such as emails evaluated, expected reviews identified, missed or unnecessary reviews, field-extraction coverage, and processing failures. It does not claim guaranteed production accuracy.
-- **Email filtering:** filters timestamped records by Today, Last 7 Days, Last 30 Days, All Time, or a custom range. The dashboard emphasizes current case status and review needs instead of producing time trends from a single seeded processing run.
-- **Case Detail:** shows the email, attachment text, SI and draft BL evidence, normalized values, discrepancies, validation results, and reviewer actions in one page.
+- **Reviewer workspace:** centers the main workflow on verifying documents and reviewing exceptions. Four operational totals, concise validation evidence, verification outcomes, human-review reasons, filters, the original email dataset, and new-submission history remain visible without turning the workspace into a generic analytics page.
+- **Validation results:** presents a small set of dataset-specific results: emails evaluated, expected reviews identified, missed reviews, and field-extraction coverage. Technical precision and recall remain in the scorer output and documentation instead of dominating the dashboard.
+- **Interactive review views:** operational totals, verification outcomes, and human-review reason cards filter the email table so reviewers can move directly from a count to the affected cases.
+- **Email filtering:** supports search, category, status, and real-timestamp date filters for Today, Last 7 Days, Last 30 Days, All Time, and a custom range. The interface does not manufacture Daily/Weekly/Monthly trends from the seeded snapshot.
+- **Case Detail:** makes the seven-field SI and draft BL comparison and discrepancy count the main result, with source evidence, normalized values, processing methods, validation results, and reviewer actions together.
+- **Source evidence:** mismatch details show the SI and draft BL source text so reviewers can inspect why a result was produced.
 - **Human review:** reviewers can confirm or correct a field, mark values equivalent, choose which attachment is the SI or draft BL, retry extraction or OCR, confirm a mismatch, resolve a review, and reopen a completed review.
 - **Correction drafting:** creates a draft only after a mismatch is confirmed. The application never sends it automatically.
-- **Combined upload:** one **Add emails and documents** function supports a single email with SI/BL files, mixed SI/BL files or a folder, and separate SI and BL folders.
+- **Combined upload:** one **Verify documents** function near the top of the hosted workspace supports a single email with SI/BL files, mixed SI/BL files or a folder, and separate SI and BL folders.
 - **Batch safety:** previews pairs before processing, leaves unclear files unprocessed for manual pairing, handles 1–10 pairs per run, pauses after the current pair, retries failures, and skips a saved pair with the same pairing key, filenames, sizes, and modified timestamps.
+- **Visible AI and cloud integration:** the workspace states where Gemini assists uncertain extraction or OCR, where deterministic rules make the final decision, and where Firebase Authentication and Firestore protect reviewer data.
 - **Private cloud demo:** Firebase Authentication and Firestore rules restrict the original dataset to the verified project owner. The public Hosting files contain no original email data or attachment binaries.
 
 ### Status meanings
@@ -65,7 +68,7 @@ The seven verified fields are:
 - [main/main.py](main/main.py) coordinates classification, extraction, validation, fallback AI, status decisions, and competition output.
 - [main/ai_service.py](main/ai_service.py) contains the validated Gemini fallbacks for uncertain intent, document roles, unfamiliar labels, PDF transcription, and review explanations.
 - [main/review_actions.py](main/review_actions.py) applies reviewer confirmation, correction, and equivalence decisions before rerunning deterministic comparison.
-- [main/dashboard.py](main/dashboard.py) and [main/dashboard.html](main/dashboard.html) provide the local API, Dashboard, Case Detail, operational totals, validation results, email date filters, case-distribution and review-reason summaries, evidence views, retry actions, and review workflow.
+- [main/dashboard.py](main/dashboard.py) and [main/dashboard.html](main/dashboard.html) provide the local API, Dashboard, Case Detail, clickable operational totals, validation results, date filters, verification and review-reason summaries, processing-method explanations, evidence views, retry actions, and review workflow.
 - [spark/src/app.js](spark/src/app.js) connects the hosted interface to Google sign-in, private Firestore records, Firebase AI Logic, reanalysis, and new-email history.
 - [spark/src/batch.js](spark/src/batch.js) and [spark/src/batch_ui.js](spark/src/batch_ui.js) implement mixed-file and folder pairing, preview, manual pairing, limits, pause, retry, and duplicate skipping.
 - [spark/firestore.rules](spark/firestore.rules) restricts the original dataset and reviewer workspace to the verified owner account.
@@ -101,15 +104,36 @@ TXT, XLSX, and DOCX extraction use the Python standard library. Selectable PDF t
 .venv\Scripts\python.exe main\dashboard.py
 ```
 
-Open `http://127.0.0.1:8765`. The Dashboard is the home page. Summary cards show operational totals, while a separate validation summary presents tested results for the supplied dataset. Search, category, status, and date filters narrow the email table; opening a row takes you to its Case Detail page.
+Open `http://127.0.0.1:8765`. The Dashboard is an operational verification workspace. The heading states the product purpose and exposes **Verify documents** and **Review exceptions** as the two primary actions. A compact status strip reports whether the dataset is loaded, Firestore is connected, and Gemini assistance is available.
 
-For timestamped records, the date filter supports **Today**, **Last 7 Days**, **Last 30 Days**, **All Time**, and a **Custom range**. Records without a valid email or processing timestamp are excluded from date filtering rather than assigned an invented date. The current dataset is a seeded validation snapshot, so the dashboard does not present artificial Daily/Weekly/Monthly trends.
+The first summary row contains four operational counts:
 
-The **Validation Results** section shows 520 emails evaluated, expected reviews identified, missed reviews, unnecessary reviews, current field-extraction coverage, and processing failures. Classification and mismatch results remain clearly labelled in the explanatory note as results from the included validation set. Coverage indicates whether values were found and is not labelled as extraction accuracy. **Case Distribution** summarizes no-mismatch, mismatch, human-review, and not-applicable cases. **Human Review Reasons** groups review cases into wrong document, missing attachment, unreadable document, missing value, or other.
+- **Total emails**
+- **Document checks**
+- **Mismatches detected**
+- **Human review required**
 
-The detail page keeps the seven-field SI/BL comparison, clickable mismatch evidence, human-review actions, and expandable email and attachments together. A reviewer can confirm or correct a selected value, mark two values equivalent, choose the SI and draft BL, retry extraction, confirm a mismatch, resolve a review, or undo review completion. Value changes rerun the comparison and update the case and submission. If Gemini is configured, an on-demand AI explanation can summarize review evidence and PDF cases can be retried with OCR/Vision; the verification rules still decide the result. A correction email draft, optionally worded by AI, is available only after a mismatch is confirmed; the reviewer must send it separately.
+Selecting a summary card filters the email table to the related records. `Processing` remains a case status while work is running and is not a permanent headline card. The hosted **Verify documents** workflow appears near the top because SI/BL verification is the core task. Its stages are reading the email and attachments, identifying the SI and draft BL, extracting the seven fields, validating identifiers and totals, comparing normalized values, and returning no mismatch, mismatch, or human review.
 
-The hosted browser edition has one **Add emails and documents** function with these modes:
+The concise **Validation Results** section shows emails evaluated, expected review cases identified, missed reviews, and field-extraction coverage. Classification accuracy and mismatch precision or recall remain available in the scorer output and explanatory note. Results are explicitly labelled as evidence from the supplied validation dataset, not guaranteed performance on unseen production data. Coverage measures whether required values were found and is not described as extraction accuracy.
+
+The **Verification Overview** focuses on document checks: verified with no mismatch, mismatch detected, and human review required. Other emails remain accessible through the category filters. **Human Review Reasons** groups unresolved cases into wrong document, missing attachment, missing value, unreadable document, or other. Selecting an overview or reason card filters the table.
+
+Search, category, status, and date filters narrow the email table. The date choices are **Today**, **Last 7 Days**, **Last 30 Days**, **All Time**, and **Custom range**. Records without meaningful timestamps are excluded instead of assigned invented dates. The seeded validation snapshot does not produce artificial Daily/Weekly/Monthly charts. Each compact table row shows the subject with its sender underneath, category, verification status, attachment count, updated time, and the next action.
+
+Opening a row takes the reviewer to Case Detail. The seven-field SI/BL comparison and discrepancy count are the main result. Mismatch rows open the relevant SI and draft BL source evidence. A processing-method panel explains that classification uses rules with a validated Gemini fallback, native document extraction runs first, Gemini Vision/OCR can assist scanned files when requested, and normalization, validation, comparison, and the final verification decision remain deterministic. Uncertain evidence goes to human review instead of being guessed.
+
+A reviewer can confirm or correct a selected value, mark two values equivalent, choose the SI and draft BL, retry extraction, confirm a mismatch, resolve a review, or undo review completion. Value changes rerun deterministic comparison and update the case and submission. If Gemini is configured, an on-demand explanation can summarize review evidence and PDF cases can be retried with OCR/Vision. A correction email draft, optionally worded by AI, is available only after a mismatch is confirmed; the reviewer must send it separately.
+
+The end-to-end design is:
+
+```text
+Email / Documents -> Classification -> Extraction -> Gemini fallback when needed -> Normalization and validation -> Deterministic SI/BL comparison -> Match / Mismatch / Human review
+```
+
+Firebase Authentication and Firestore support the private hosted workspace. Shipping staff can classify requests, inspect SI and draft BL evidence, verify the seven fields, investigate exceptions, and prepare corrections from one workspace.
+
+The hosted browser edition has one **Verify documents** function for adding emails and documents in these modes:
 
 1. **One email with SI and BL:** captures sender, recipient, subject, body, and two documents. If the documents belong to one of the original 520 emails, the app opens that email for reanalysis instead of creating a duplicate.
 2. **Mixed SI/BL files or folder:** identifies roles from names and folders, pairs documents by a shared shipment key, and presents the proposed pairs before processing.
@@ -136,7 +160,19 @@ To inspect why cases enter review, generate a diagnostic report. Supplying groun
 .venv\Scripts\python.exe main\review_diagnostics.py --ground-truth Docker\data_v2\ground_truth.json --output review_diagnostics.json
 ```
 
-The current 520-email evaluation produces 20 reviews for 20 expected cases: five wrong-document cases, five missing-attachment cases, five unreadable cases, and five missing-value cases. It reports zero false reviews and zero missed reviews while retaining 100% category accuracy and exact mismatch results against the included ground truth.
+The current 520-email evaluation produces 20 reviews for 20 expected cases: five wrong-document cases, five missing-attachment cases, five unreadable cases, and five missing-value cases. It reports zero false reviews and zero missed reviews while retaining 100% category accuracy and exact mismatch results against the included ground truth. These figures are specific to the supplied validation dataset and are not presented as guaranteed performance on unseen production data.
+
+### Demo highlights
+
+- Email classification
+- SI and draft BL document extraction
+- Seven-field verification
+- Mismatch detection with source evidence
+- Human review for uncertain cases
+- Scanned PDF handling with Gemini
+- Reviewer correction followed by deterministic re-verification
+
+The README documents prototype capabilities. Presentation timing and speaking notes belong in separate demo material.
 
 ## No-billing cloud demo
 

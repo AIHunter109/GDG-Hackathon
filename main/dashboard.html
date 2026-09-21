@@ -90,7 +90,7 @@
             }
             .metrics {
                 display: grid;
-                grid-template-columns: repeat(6, minmax(0, 1fr));
+                grid-template-columns: repeat(4, minmax(0, 1fr));
                 gap: 10px;
                 margin-bottom: 17px;
             }
@@ -107,6 +107,20 @@
             .metric span {
                 color: #597384;
                 font-size: 12px;
+            }
+            .metric.interactive {
+                cursor: pointer;
+                transition: border-color 120ms ease, transform 120ms ease;
+            }
+            .metric.interactive:hover,
+            .metric.interactive:focus-visible,
+            .metric.interactive.active {
+                border-color: #16879a;
+                transform: translateY(-1px);
+            }
+            .metric.interactive:focus-visible {
+                outline: 3px solid #16879a;
+                outline-offset: 2px;
             }
             .performance-metrics {
                 margin-bottom: 10px;
@@ -128,6 +142,27 @@
             }
             .card-head h2 {
                 margin: 0;
+            }
+            .header-actions {
+                display: flex;
+                gap: 9px;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+            }
+            .status-strip {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin: -4px 0 16px;
+            }
+            .status-item {
+                border: 1px solid #d5e3e9;
+                border-radius: 20px;
+                background: #f8fbfc;
+                color: #476879;
+                padding: 5px 10px;
+                font-size: 12px;
+                font-weight: 650;
             }
             .toolbar,
             .actions {
@@ -219,25 +254,22 @@
                 min-width: 1060px;
             }
             .master th:nth-child(1) {
-                width: 24%;
+                width: 32%;
             }
             .master th:nth-child(2) {
-                width: 17%;
+                width: 16%;
             }
             .master th:nth-child(3) {
-                width: 14%;
+                width: 20%;
             }
             .master th:nth-child(4) {
-                width: 18%;
+                width: 9%;
             }
             .master th:nth-child(5) {
-                width: 7%;
+                width: 14%;
             }
             .master th:nth-child(6) {
-                width: 12%;
-            }
-            .master th:nth-child(7) {
-                width: 8%;
+                width: 9%;
             }
             tr.clickable {
                 cursor: pointer;
@@ -516,6 +548,10 @@
                 header {
                     display: block;
                 }
+                .header-actions {
+                    justify-content: flex-start;
+                    margin-top: 12px;
+                }
                 .detail-grid,
                 .evidence-grid,
                 .batch-inputs {
@@ -543,11 +579,21 @@
                         <span id="ai-state"></span>
                     </p>
                 </div>
+                <div class="header-actions" aria-label="Primary actions">
+                    <button id="verify-documents" class="small-btn primary" type="button">Verify documents</button>
+                    <button id="review-exceptions" class="small-btn" type="button">Review exceptions</button>
+                </div>
             </header>
             <main id="dashboard-view">
                 <section id="spark-auth" class="card hidden">
                     <p id="spark-status" class="notice">Connecting to Firebase…</p>
                 </section>
+                <div id="system-status" class="status-strip" aria-label="System status">
+                    <span id="dataset-status" class="status-item">Dataset loading</span>
+                    <span id="firestore-status" class="status-item">Local workspace</span>
+                    <span id="gemini-status" class="status-item">Gemini unavailable</span>
+                </div>
+                <div id="new-email-form-slot"></div>
                 <div
                     id="metrics"
                     class="metrics"
@@ -563,14 +609,14 @@
                 </section>
                 <div class="summary-grid">
                     <section class="card">
-                        <div class="card-head"><h2>Case Distribution</h2></div>
+                        <div class="card-head"><h2>Verification Overview</h2></div>
                         <div id="case-distribution" class="metrics performance-metrics"></div>
-                        <p class="muted">Current cases grouped by operational outcome.</p>
+                        <p class="muted">Document checks grouped by verification outcome. Select a card to view its cases.</p>
                     </section>
                     <section class="card">
                         <div class="card-head"><h2>Human Review Reasons</h2></div>
                         <div id="review-reasons" class="metrics performance-metrics"></div>
-                        <p class="muted">Current unresolved reviews grouped by the reason manual action is required.</p>
+                        <p class="muted">Current unresolved reviews grouped by the reason manual action is required. Select a card to filter the table.</p>
                     </section>
                 </div>
                 <section class="card">
@@ -628,9 +674,8 @@
                         <table class="master">
                             <thead>
                                 <tr>
-                                    <th>Email</th>
-                                    <th>Sender</th>
-                                    <th>Classification</th>
+                                    <th>Subject and sender</th>
+                                    <th>Category</th>
                                     <th>Verification status</th>
                                     <th>Attachments</th>
                                     <th>Updated</th>
@@ -641,7 +686,6 @@
                         </table>
                     </div>
                 </section>
-                <div id="new-email-form-slot"></div>
                 <section id="new-email-history" class="card hidden">
                     <div class="card-head">
                         <h2>New email history</h2>
@@ -652,9 +696,8 @@
                         <table class="master">
                             <thead>
                                 <tr>
-                                    <th>Email</th>
-                                    <th>Sender</th>
-                                    <th>Subject</th>
+                                    <th>Subject and sender</th>
+                                    <th>Category</th>
                                     <th>Verification status</th>
                                     <th>Attachments</th>
                                     <th>Updated</th>
@@ -726,6 +769,8 @@
                 selected: null,
                 email: null,
                 mismatch: 0,
+                reasonFilter: null,
+                summaryFilter: null,
             };
             async function request(url, body) {
                 if (window.SPARK_MODE) return window.sparkRequest(url, body);
@@ -905,6 +950,35 @@
                     node("span", title),
                 );
             }
+            function filterMetric(title, value, key, filters) {
+                const card = metric(title, value);
+                card.classList.add("interactive");
+                card.classList.toggle("active", state.summaryFilter === key);
+                card.tabIndex = 0;
+                card.setAttribute("role", "button");
+                card.setAttribute("aria-label", `${title}: ${value}. Filter emails.`);
+                const activate = () => applySummaryFilter(key, filters);
+                card.onclick = activate;
+                card.onkeydown = (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        activate();
+                    }
+                };
+                return card;
+            }
+            function applySummaryFilter(key, { category = "all", status = "all", reason = null } = {}) {
+                state.summaryFilter = key;
+                state.reasonFilter = reason;
+                $("search").value = "";
+                $("category-filter").value = category;
+                $("status-filter").value = status;
+                $("date-filter").value = "all";
+                $("date-from-field").classList.add("hidden");
+                $("date-to-field").classList.add("hidden");
+                renderDashboard();
+                $("case-table").closest("section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
             function percentage(value) {
                 return Number.isFinite(value) ? (value * 100).toFixed(value === 1 ? 0 : 1) + "%" : "Unavailable";
             }
@@ -942,36 +1016,41 @@
                     metric("Emails evaluated", verified.emails_evaluated),
                     metric("Expected reviews identified", `${verified.expected_reviews - verified.missed_reviews} / ${verified.expected_reviews}`),
                     metric("Missed reviews", verified.missed_reviews),
-                    metric("Unnecessary reviews", verified.false_reviews),
                     metric("Field extraction coverage", percentage(m.field_extraction_coverage)),
-                    metric("Processing failures", m.processing_failures || 0),
                 ] : [
                     metric("Emails loaded", m.total || 0),
                     metric("Field extraction coverage", percentage(m.field_extraction_coverage)),
-                    metric("Processing failures", m.processing_failures || 0),
                 ];
                 $("performance-metrics").replaceChildren(...values);
                 $("performance-note").textContent = verified
-                    ? `${verified.dataset}; verified ${verified.verified_at}. Classification accuracy and mismatch precision/recall were ${percentage(verified.classification_accuracy)} on this validation set. These results are dataset-specific evidence, not guaranteed performance on unseen production data. Coverage and failures are calculated from the currently loaded cases.`
-                    : "Ground-truth validation results are unavailable. Coverage and failures are calculated from the currently loaded cases; no accuracy is inferred.";
+                    ? `${verified.dataset}; verified ${verified.verified_at}. Classification accuracy and mismatch precision/recall were ${percentage(verified.classification_accuracy)} on this validation set. These results are dataset-specific evidence, not guaranteed performance on unseen production data. Coverage is calculated from the currently loaded cases and measures whether required values were found, not whether every extracted value is accurate.`
+                    : "Ground-truth validation results are unavailable. Coverage is calculated from the currently loaded cases and does not imply extraction accuracy.";
             }
             function renderCaseSummaries() {
-                const cases = Object.entries(state.cases);
+                const newIds = new Set(state.features.new_case_ids || []);
+                const cases = Object.entries(state.cases).filter(([id]) => !newIds.has(id));
                 const distribution = {
-                    "No mismatch": cases.filter(([, c]) => c.category === "BL_COMPARISON" && c.status === "OK").length,
-                    "Mismatch": cases.filter(([, c]) => c.status === "MISMATCH").length,
-                    "Human review": cases.filter(([, c]) => c.status === "NEEDS_REVIEW").length,
-                    "Not applicable": cases.filter(([, c]) => c.category !== "BL_COMPARISON" || c.status === "NOT_APPLICABLE").length,
+                    "Verified - No mismatch": cases.filter(([, c]) => c.category === "BL_COMPARISON" && c.status === "OK").length,
+                    "Mismatch detected": cases.filter(([, c]) => c.status === "MISMATCH").length,
+                    "Human review required": cases.filter(([id, c]) => unresolved(id, c)).length,
                 };
-                $("case-distribution").replaceChildren(...Object.entries(distribution).map(([name, count]) => metric(name, count)));
+                const overviewFilters = {
+                    "Verified - No mismatch": { category: "BL_COMPARISON", status: "OK" },
+                    "Mismatch detected": { status: "MISMATCH" },
+                    "Human review required": { status: "NEEDS_REVIEW" },
+                };
+                $("case-distribution").replaceChildren(...Object.entries(distribution).map(([name, count]) =>
+                    filterMetric(name, count, `overview:${name}`, overviewFilters[name])));
                 const labels = { wrong_doc_type: "Wrong document", missing_attachment: "Missing attachment",
                     unreadable: "Unreadable document", missing_value: "Missing value" };
                 const reasons = {};
-                for (const [, c] of cases) if (c.status === "NEEDS_REVIEW") {
-                    const reason = labels[c.review_reason] || "Other";
-                    reasons[reason] = (reasons[reason] || 0) + 1;
+                for (const [id, c] of cases) if (unresolved(id, c)) {
+                    const code = labels[c.review_reason] ? c.review_reason : "other";
+                    if (!reasons[code]) reasons[code] = { label: labels[code] || "Other", count: 0 };
+                    reasons[code].count += 1;
                 }
-                $("review-reasons").replaceChildren(...Object.entries(reasons).map(([name, count]) => metric(name, count)));
+                $("review-reasons").replaceChildren(...Object.entries(reasons).map(([code, item]) =>
+                    filterMetric(item.label, item.count, `reason:${code}`, { status: "NEEDS_REVIEW", reason: code })));
                 if (!Object.keys(reasons).length) $("review-reasons").append(metric("No active reviews", 0));
             }
             function visibleCases() {
@@ -990,8 +1069,11 @@
                         status === "all" ||
                         (status === "NEEDS_REVIEW" && unresolved(id, c)) ||
                         status === key;
+                    const reasonCode = ["wrong_doc_type", "missing_attachment", "unreadable", "missing_value"].includes(c.review_reason)
+                        ? c.review_reason : "other";
                     return (
                         statusMatch &&
+                        (!state.reasonFilter || state.reasonFilter === reasonCode) &&
                         dateMatches(c) &&
                         (category === "all" || category === c.category) &&
                         [id, e.from, e.subject].some((v) =>
@@ -1006,6 +1088,19 @@
                 const m = state.metrics;
                 const isCloud = Boolean(state.features.cloud_mode);
                 const newIds = state.features.new_case_ids || [];
+                $("dataset-status").textContent = isCloud
+                    ? `${state.features.original_email_count || m.total || 0} private emails loaded`
+                    : window.SPARK_MODE
+                      ? "Private dataset locked"
+                      : `${m.total || 0} local emails loaded`;
+                $("firestore-status").textContent = isCloud
+                    ? "Firestore connected"
+                    : window.SPARK_MODE
+                      ? "Firestore sign-in required"
+                      : "Local workspace";
+                $("gemini-status").textContent = state.features.ai_enabled
+                    ? "Gemini assistance available"
+                    : "Gemini assistance unavailable";
                 $("new-email-history").classList.toggle("hidden", !isCloud);
                 if (isCloud) {
                     $("new-email-count").textContent =
@@ -1025,9 +1120,12 @@
                                 if (event.key === "Enter") openCase(id);
                             };
                             row.append(
-                                node("td", id),
-                                node("td", c.email?.from || "—"),
-                                node("td", c.email?.subject || "—"),
+                                add(
+                                    node("td"),
+                                    node("span", c.email?.subject || "No subject", "subject"),
+                                    node("div", `${c.email?.from || "Unknown sender"} · ${id}`, "secondary-text"),
+                                ),
+                                add(node("td"), node("span", LABEL[c.category] || c.category, "badge " + c.category)),
                                 add(node("td"), node("span", resultLabel(c), "badge " + resultKey(c))),
                                 node("td", String(c.email?.attachments?.length || 0)),
                                 node("td", shortDate(latestUpdate(c, state.decisions[id]))),
@@ -1037,18 +1135,16 @@
                         });
                     if (!historyRows.length) {
                         const cell = node("td", "No new emails submitted yet.", "muted");
-                        cell.colSpan = 7;
+                        cell.colSpan = 6;
                         historyRows.push(add(node("tr"), cell));
                     }
                     $("new-email-table").replaceChildren(...historyRows);
                 }
                 $("metrics").replaceChildren(
-                    metric("Total Emails", m.total || 0),
-                    metric("Document Checks", m.comparison_requests || 0),
-                    metric("No Mismatch Detected", m.automatically_cleared || 0),
-                    metric("Mismatch Detected", m.mismatches || 0),
-                    metric("Human Review Required", m.human_review || 0),
-                    metric("Processing", m.processing || 0),
+                    filterMetric("Total Emails", m.total || 0, "summary:total", {}),
+                    filterMetric("Document Checks", m.comparison_requests || 0, "summary:checks", { category: "BL_COMPARISON" }),
+                    filterMetric("Mismatches Detected", m.mismatches || 0, "summary:mismatch", { status: "MISMATCH" }),
+                    filterMetric("Human Review Required", m.human_review || 0, "summary:review", { status: "NEEDS_REVIEW" }),
                 );
                 renderPerformance();
                 renderCaseSummaries();
@@ -1105,9 +1201,8 @@
                                     e.subject || "No subject",
                                     "subject",
                                 ),
-                                node("div", id, "secondary-text"),
+                                node("div", `${e.from || "Unknown sender"} · ${id}`, "secondary-text"),
                             ),
-                            node("td", e.from || "Unknown sender"),
                             add(
                                 node("td"),
                                 node(
@@ -1133,7 +1228,7 @@
                         "No cases match these filters.",
                         "muted",
                     );
-                    cell.colSpan = 7;
+                    cell.colSpan = 6;
                     $("case-table").append(add(node("tr"), cell));
                 }
             }
@@ -1167,12 +1262,14 @@
                     Object.assign(state, data);
                     $("deployment-state").textContent =
                         "Shipping operations · " +
-                        (state.features.cloud_mode
+                        (window.SPARK_MODE
                             ? "Cloud application"
                             : "Local prototype");
                     $("ai-state").textContent = state.features.ai_enabled
                         ? "AI assistance available."
-                        : "AI assistance unavailable in this demo.";
+                        : window.SPARK_MODE
+                          ? "Sign in to enable AI assistance."
+                          : "AI assistance unavailable in this demo.";
                     route();
                 } catch (error) {
                     $("dashboard-view").replaceChildren(
@@ -1329,6 +1426,7 @@
                 );
                 head.append(box);
                 area.append(head);
+                renderProcessingMethod(c, area);
                 if (window.SPARK_MODE && state.features.ai_enabled)
                     area.append(
                         add(
@@ -1355,6 +1453,28 @@
                 )
                     renderComparison(c, area);
                 renderSource(c, e, area);
+            }
+            function renderProcessingMethod(c, area) {
+                const panel = section("Processing method"),
+                    list = node("ul", "", "muted");
+                [
+                    "Email classification: deterministic rules with validated Gemini fallback when intent is uncertain.",
+                    "Document extraction: native parsing first; Gemini Vision/OCR can assist scanned PDFs when requested.",
+                    "Field normalization and document validation: deterministic rules.",
+                    "SI and draft BL comparison: deterministic rules across the seven required fields.",
+                    "Final verification: rules return no mismatch, mismatch, or human review; Gemini does not make the final decision.",
+                ].forEach((text) => list.append(node("li", text)));
+                panel.append(
+                    node(
+                        "p",
+                        "Email / Documents → Classification → Extraction → Gemini fallback when needed → Normalization and validation → Deterministic comparison → Match / Mismatch / Human review",
+                        "notice",
+                    ),
+                    list,
+                );
+                if (c.status === "NEEDS_REVIEW")
+                    panel.append(node("p", "This case stopped for human review instead of guessing from uncertain evidence.", "muted"));
+                area.append(panel);
             }
             function fieldResult(a, b) {
                 if (
@@ -1461,7 +1581,12 @@
                         node("td", prettyField(name)),
                         fieldCell(si, showNorm),
                         fieldCell(bl, showNorm),
-                        node("td", label, "result " + kind),
+                        add(
+                            node("td", label, "result " + kind),
+                            ...(kind === "mismatch"
+                                ? [node("div", "View source evidence", "secondary-text")]
+                                : []),
+                        ),
                     );
                     body.append(row);
                 });
@@ -1690,6 +1815,7 @@
                         ),
                     );
                     actions.append(
+                        button("View source evidence", () => openSource(c, "si")),
                         button("Retry extraction", () => retry(c.email_id)),
                         button("Resolve case", () =>
                             decision(c.email_id, "resolve"),
@@ -1755,6 +1881,7 @@
                 panel.append(row);
                 if (fieldData)
                     actions.append(
+                        button("View source evidence", () => openSource(c, roleName)),
                         button(
                             "Confirm selected value",
                             () =>
@@ -2012,19 +2139,34 @@
                     alert(error.message);
                 }
             }
+            function renderAfterManualFilter() {
+                state.reasonFilter = null;
+                state.summaryFilter = null;
+                renderDashboard();
+            }
             $("back-button").onclick = showDashboard;
-            $("search").oninput = renderDashboard;
-            $("category-filter").onchange = renderDashboard;
-            $("status-filter").onchange = renderDashboard;
+            $("verify-documents").onclick = () => {
+                showDashboard();
+                setTimeout(() => $("new-email-form-slot").scrollIntoView({ behavior: "smooth", block: "start" }));
+            };
+            $("review-exceptions").onclick = () =>
+                applySummaryFilter("summary:review", { status: "NEEDS_REVIEW" });
+            $("search").oninput = renderAfterManualFilter;
+            $("category-filter").onchange = renderAfterManualFilter;
+            $("status-filter").onchange = renderAfterManualFilter;
             $("date-filter").onchange = () => {
+                state.reasonFilter = null;
+                state.summaryFilter = null;
                 const custom = $("date-filter").value === "custom";
                 $("date-from-field").classList.toggle("hidden", !custom);
                 $("date-to-field").classList.toggle("hidden", !custom);
                 renderDashboard();
             };
-            $("date-from").onchange = renderDashboard;
-            $("date-to").onchange = renderDashboard;
+            $("date-from").onchange = renderAfterManualFilter;
+            $("date-to").onchange = renderAfterManualFilter;
             $("clear-filters").onclick = () => {
+                state.reasonFilter = null;
+                state.summaryFilter = null;
                 $("search").value = "";
                 $("category-filter").value = "all";
                 $("status-filter").value = "all";

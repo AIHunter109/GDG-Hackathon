@@ -28,7 +28,8 @@ function renderUploadCard() {
   const card = document.createElement("section");
   card.className = "card";
   card.innerHTML = `
-    <div class="card-head"><h2>Add emails and documents</h2><span class="badge">Private workspace</span></div>
+    <div class="card-head"><h2>Verify documents</h2><span class="badge">Private workspace</span></div>
+    <p class="muted">Add an email with its SI and draft BL, or verify paired documents in a batch. Gemini assists extraction when needed; deterministic rules make the final comparison.</p>
     <label class="filter-field">Upload type
       <select id="upload-mode">
         <option value="email">One email with SI and BL</option>
@@ -37,7 +38,7 @@ function renderUploadCard() {
       </select>
     </label>
     <div id="single-upload-panel">
-      <p class="muted">Add one email and its SI and draft BL. For documents from one of the original 520 emails, open that email and choose Reanalyze with Gemini. Files are sent to Gemini only when you select Analyze.</p>
+      <p class="muted">Add one email and its SI and draft BL. For documents from one of the original 520 emails, open that email and choose Reanalyze with Gemini. Files are sent to Gemini only when you select Verify documents.</p>
       <form id="spark-form" class="toolbar">
       <input name="from" type="email" aria-label="Sender email" placeholder="Sender email" required />
       <input name="to" type="email" aria-label="Recipient email" placeholder="Recipient email (optional)" />
@@ -48,7 +49,7 @@ function renderUploadCard() {
       </label>
       <label>Shipping instruction <input name="si" type="file" accept=".pdf,.txt,application/pdf,text/plain" required /></label>
       <label>Draft BL <input name="bl" type="file" accept=".pdf,.txt,application/pdf,text/plain" required /></label>
-      <button class="small-btn primary" type="submit">Analyze and save</button>
+      <button class="small-btn primary" type="submit">Verify documents</button>
       </form>
     </div>
     <div id="batch-upload-slot" class="hidden"></div>`;
@@ -156,7 +157,7 @@ async function connectFirebase() {
   if (bundle.size !== 520) throw new Error(`Private bundle is incomplete (${bundle.size}/520 cases).`);
   baseRecords = Object.fromEntries(bundle.docs.map((item) => [item.id, { case: item.data(), decision: null }]));
   await reloadCloudRecords();
-  showStatus("All 520 original emails loaded from private Firestore. Reviewer decisions are saved in your account. Gemini runs only when you select Analyze or request an explanation.");
+  showStatus("All 520 original emails loaded from private Firestore. Reviewer decisions are saved in your account. Gemini runs only when you start document verification, reanalysis, or request an explanation.");
 }
 
 async function reloadCloudRecords() {
