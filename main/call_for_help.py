@@ -1,6 +1,7 @@
 """Persist reviewer decisions separately from automated predictions."""
 
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,6 +28,7 @@ def draft_correction_email(case, *, confirmed=False):
 class RaiseIssueToHuman:
     def __init__(self, path="review_decisions.json"):
         self.path = Path(path)
+        self._lock = threading.Lock()
 
     def _read(self):
         return (
@@ -52,6 +54,7 @@ class RaiseIssueToHuman:
             "confirm_value",
             "correct",
             "mark_equivalent",
+
             "resolve",
             "reopen",
             "select_document",
@@ -65,28 +68,23 @@ class RaiseIssueToHuman:
             raise ValueError(f"Unknown reviewer action: {action}")
         if action == "correct" and not corrections:
             raise ValueError("Corrections are required for the correct action")
-        decisions = self._read()
-        existing = decisions.get(email_id, {})
-        updated_at = datetime.now(timezone.utc).isoformat()
-        event = {
-            "action": action,
-            "note": note,
-            "details": corrections or {},
-            "at": updated_at,
-        }
-        decision = {
-            **existing,
-            "updated_at": updated_at,
-            "activity": [*existing.get("activity", []), event][-100:],
-        }
-        if action == "update_assignment":
-            decision["assignment"] = corrections or {}
-        elif action == "reviewer_feedback":
-            decision["feedback"] = corrections or {}
-        else:
-            decision.update(
-                {"action": action, "note": note, "corrections": corrections or {}}
-            )
-        decisions[email_id] = decision
-        self.path.write_text(json.dumps(decisions, indent=2), encoding="utf-8")
-        return decisions[email_id]
+        with self._lock:
+            decisions = self._read()
+            previous_entry = decisions.get(email_id)
+            history = (previous_entry or {}).get("history", [])
+            if previous_entry is not None:
+                # Keep every prior decision as an immutable audit trail entry
+                # rather than silently overwriting it.
+                history = [
+                    *history,
+                    {k: v for k, v in previous_entry.items() if k != "history"},
+                ]
+            decisions[email_id] = {
+                "action": action,
+                "note": note,
+                "corrections": corrections or {},
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "history": history,
+            }
+            self.path.write_text(json.dumps(decisions, indent=2), encoding="utf-8")
+            return decisions[email_id]

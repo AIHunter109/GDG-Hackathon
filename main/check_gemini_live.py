@@ -1,9 +1,25 @@
-"""Check live Gemini text and PDF paths using only synthetic content."""
+"""Verify the configured AI provider actually works before relying on it
+anywhere real. Works for either provider (Gemini or GonkaRouter) -- whichever
+one AIService() auto-detects from your configured key.
 
+Checks two paths with only synthetic content -- no bundle data, no key ever
+printed: (1) text classification, (2) image-only PDF vision/OCR, using a
+synthetic scanned PDF with no selectable text (rendered from a tiny bitmap
+font below, so this needs no real scanned document to test against). Run
+after setting up your key (via .env or a real environment variable):
+
+    python main/check_gemini_live.py
+"""
 import io
-import os
 import sys
 import zlib
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from dotenv_loader import load_dotenv
+
+load_dotenv()
 
 from ai_service import AIService
 
@@ -77,32 +93,55 @@ def synthetic_scanned_pdf():
 
 
 def main():
-    if not os.getenv("GEMINI_API_KEY"):
-        raise SystemExit("Set GEMINI_API_KEY in the process environment first")
     ai = AIService()
-    email = {
-        "subject": "Please verify draft BL against SI",
-        "body": "Check the draft bill of lading against the shipping instruction.",
-        "attachments": [],
+    if not ai.enabled:
+        print(
+            "FAIL: no API key found. Set GEMINI_API_KEY or GONKAROUTER_API_KEY "
+            "as a real environment variable, or fill one in in .env."
+        )
+        return 1
+
+    print(f"Provider: {ai.provider}")
+    print(f"Found a key ({len(ai.api_key)} characters, not shown). Model: {ai.model}")
+
+    print("\n--- Check 1: text classification ---")
+    synthetic_email = {
+        "subject": "RE_ TO CONFIRM DOCS",
+        "body": "Please check the attached SI against the draft BL and confirm.",
+        "attachments": ["attachments/x_SI.txt", "attachments/x_BL.txt"],
     }
-    classification = ai.classify_email(email)
-    print(
-        "Gemini classification:",
-        classification.get("category") if classification else None,
-    )
+    result = ai.classify_email(synthetic_email)
+    if result is None:
+        print(
+            "FAIL: the API call did not return a usable result. Common causes: "
+            "wrong model name for this key/account, invalid key, no network "
+            "access, or a temporary outage/rate limit on the provider's side. "
+            "Check the provider's dashboard for available model names and set "
+            "GEMINI_MODEL or GONKAROUTER_MODEL if needed."
+        )
+        return 1
+    print("PASS: live call succeeded.")
+    print(f"  category:   {result['category']}")
+    print(f"  confidence: {result['confidence']}")
+    print(f"  reason:     {result['reason']}")
+    print(f"  method:     {result['method']}")
+
+    print("\n--- Check 2: image-only PDF vision/OCR ---")
     pdf = synthetic_scanned_pdf()
     from pypdf import PdfReader
 
-    assert not PdfReader(io.BytesIO(pdf)).pages[0].extract_text().strip()
+    assert not PdfReader(io.BytesIO(pdf)).pages[0].extract_text().strip(), (
+        "synthetic PDF unexpectedly has selectable text -- test is broken"
+    )
     transcription = ai.transcribe_pdf(pdf)
     text = transcription.get("text", "").upper() if transcription else ""
-    print("Gemini image-only PDF OCR:", "SHIPPER" in text and "ACME" in text)
-    if not classification or classification.get("category") != "BL_COMPARISON":
+    vision_ok = "SHIPPER" in text and "ACME" in text
+    print(f"PASS: OCR read back the label correctly." if vision_ok else "FAIL: vision path did not return the expected text (or isn't supported by this provider/model).")
+
+    if result.get("category") != "BL_COMPARISON":
         return 1
-    if "SHIPPER" not in text or "ACME" not in text:
-        return 1
-    return 0
+    return 0 if vision_ok else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

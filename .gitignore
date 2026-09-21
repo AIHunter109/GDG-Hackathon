@@ -29,6 +29,9 @@ env/
 /spark/dist/
 /spark/private/
 /spark/index.html
+/spark/package-lock.json
+/spark/public/firebase-config.json
+!.env.example
 
 # Editor and operating-system files
 .vscode/

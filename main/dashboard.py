@@ -13,6 +13,16 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from dotenv_loader import load_dotenv
+
+load_dotenv()
+
+STATIC_DIR = Path(__file__).parent / "dashboard"
+STATIC_ASSETS = {
+    "style.css": "text/css",
+    "dashboard.js": "application/javascript",
+}
+
 from ai_service import AIService
 from call_for_help import draft_correction_email
 from comparator import FIELDS
@@ -84,6 +94,9 @@ def metrics_for(cases, decisions=None):
         and decisions.get(email_id, {}).get("action") != "resolve"
         for email_id, c in cases.items()
     )
+    classification_fallback_count = sum(
+        bool(c.get("classification_fallback")) for c in cases.values()
+    )
     ai_assisted = sum(
         c.get("classification", {}).get("method") == "gemini"
         or c.get("document_identification", {}).get("method") == "gemini_role_detection"
@@ -102,11 +115,15 @@ def metrics_for(cases, decisions=None):
         "total": len(cases),
         "categories": dict(categories),
         "statuses": dict(statuses),
-        "verification_results": verification_results,
+        "verification_results": {
+            **dict(Counter(c["status"] for c in comparison)),
+            "NOT_APPLICABLE": len(cases) - len(comparison),
+        },
         "comparison_requests": len(comparison),
         "automatically_cleared": sum(c["status"] == "OK" for c in comparison),
         "mismatches": statuses["MISMATCH"],
         "human_review": unresolved_reviews,
+        "classification_fallback_count": classification_fallback_count,
         "processing_failures": statuses["PROCESSING_FAILED"],
         "processing": statuses["PROCESSING"],
         "field_extraction_coverage": extracted / (2 * len(FIELDS) * len(paired))
@@ -178,13 +195,19 @@ class Handler(BaseHTTPRequestHandler):
             if parts == [""]:
                 return self._send(
                     200,
-                    (Path(__file__).parent / "dashboard.html").read_text(
+                    (Path(__file__).parent / "dashboard/dashboard.html").read_text(
                         encoding="utf-8"
                     ),
                     "text/html",
                 )
             if parts == ["healthz"]:
                 return self._send(200, {"ok": True})
+            if len(parts) == 1 and parts[0] in STATIC_ASSETS:
+                return self._send(
+                    200,
+                    (STATIC_DIR / parts[0]).read_text(encoding="utf-8"),
+                    STATIC_ASSETS[parts[0]],
+                )
             if parts == ["api", "cases"]:
                 cases = self.store().list_cases()
                 decisions = self.store().list_decisions()
@@ -342,7 +365,13 @@ class Handler(BaseHTTPRequestHandler):
                 vision = payload.get("vision") is True
                 if vision and not AIService().enabled:
                     raise ValueError("AI vision is not configured for this demo")
-                LOG.info("Retrying %s%s", email_id, " with AI vision" if vision else "")
+                retry_count = case.get("retry_count", 0) + 1
+                LOG.info(
+                    "Retrying %s%s (attempt %d)",
+                    email_id,
+                    " with AI vision" if vision else "",
+                    retry_count,
+                )
                 store.save_processing(
                     email_id,
                     case,
@@ -366,6 +395,7 @@ class Handler(BaseHTTPRequestHandler):
                         "error": str(exc),
                     }
                     record = submission_for_case(case)
+                case["retry_count"] = retry_count
                 store.save_case(email_id, case, record)
                 return self._send(200, {"case": case, "submission": record})
             if action == "select_document":

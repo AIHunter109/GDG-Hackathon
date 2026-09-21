@@ -6,14 +6,18 @@ import logging
 import os
 import re
 import sys
+import uuid
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
-MAIN_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(MAIN_DIR))
+
+from dotenv_loader import load_dotenv
+
+load_dotenv()
 
 from ai_service import AIService
 from classify import classify_email
@@ -77,6 +81,10 @@ def build_evidence_report(case):
             "email",
             "category",
             "classification",
+            "classification_confidence",
+            "classification_fallback",
+            "retry_count",
+            "run_id",
             "status",
             "review_reason",
             "internal_reason",
@@ -112,6 +120,15 @@ def process_email(email, inbox, role_override=None, *, force_vision=False):
         "email_id": eid,
         "category": category,
         "classification": classification,
+        # Informational only -- never changes submission.json's schema or
+        # forces escalation. `classify_email`'s only low-confidence branch is
+        # the terminal GENERAL fallback (0.7); every other branch already
+        # scores >= 0.85, so this just flags "nothing more specific matched"
+        # for a reviewer to spot-check, rather than a defect.
+        "classification_confidence": classification["confidence"],
+        "classification_fallback": category == "GENERAL"
+        and classification["confidence"] < 0.8,
+        "retry_count": 0,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "email": {
             key: email.get(key)
@@ -259,7 +276,7 @@ def process_email(email, inbox, role_override=None, *, force_vision=False):
         status = "MISMATCH" if fields else "OK"
         case["status"] = status
         return _submission_record(category, status, fields), case
-    except (ValueError, UnicodeError, zipfile.BadZipFile) as exc:
+    except (ValueError, UnicodeError, zipfile.BadZipFile, ET.ParseError) as exc:
         LOG.warning("Unreadable document in %s: %s", eid, exc)
         case.update(
             status="NEEDS_REVIEW",
@@ -280,12 +297,19 @@ def process_email(email, inbox, role_override=None, *, force_vision=False):
         return _submission_record(category, "NEEDS_REVIEW", reason="unreadable"), case
 
 
-def generate_submission(inbox, *, evidence_path=None):
+def generate_submission(inbox, *, evidence_path=None, progress_every=50):
+    run_id = uuid.uuid4().hex
     submission, evidence = {}, {}
+    processed = 0
     for email in inbox:
         record, case = process_email(email, inbox)
+        case["run_id"] = run_id
         submission[email["email_id"]] = record
         evidence[email["email_id"]] = build_evidence_report(case)
+        processed += 1
+        if progress_every and processed % progress_every == 0:
+            LOG.info("run %s: processed %d emails", run_id, processed)
+    LOG.info("run %s: finished, processed %d emails", run_id, processed)
     if evidence_path:
         Path(evidence_path).write_text(json.dumps(evidence, indent=2), encoding="utf-8")
     return submission
@@ -300,7 +324,23 @@ def run():
     )
     parser.add_argument("--output", default=str(ROOT / "submission.json"))
     parser.add_argument("--evidence", default=str(ROOT / "evidence.json"))
+    parser.add_argument(
+        "--submit-url",
+        default=None,
+        help=(
+            "POST the generated submission to this inbox server's /submit "
+            "endpoint (e.g. http://localhost:8080) and print the scoreboard. "
+            "Defaults to --source when --source is itself an http(s) URL."
+        ),
+    )
+    parser.add_argument(
+        "--quiet", action="store_true", help="Suppress batch-progress logging"
+    )
     args = parser.parse_args()
+    logging.basicConfig(
+        level=logging.WARNING if args.quiet else logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
     inbox = Inbox(args.source)
     submission = generate_submission(inbox, evidence_path=args.evidence)
     expected = set(inbox.sample_submission())
@@ -314,6 +354,13 @@ def run():
     print(f"Wrote {len(submission)} records to {args.output}")
     print("Categories:", dict(Counter(r["category"] for r in submission.values())))
     print("Statuses:", dict(Counter(r["status"] for r in submission.values())))
+
+    submit_url = args.submit_url or (args.source if inbox.is_http else None)
+    if submit_url:
+        submit_inbox = inbox if submit_url == args.source else Inbox(submit_url)
+        print(f"\nSubmitting to {submit_url} ...")
+        scoreboard = submit_inbox.submit(submission)
+        print(json.dumps(scoreboard, indent=2))
 
 
 if __name__ == "__main__":

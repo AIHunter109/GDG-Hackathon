@@ -55,3 +55,16 @@ except ModuleNotFoundError:
                     encoding="utf-8"
                 )
             )
+
+        def submit(self, submission):
+            """POST a submission to the server and return the scoreboard. HTTP only."""
+            if not self.is_http:
+                raise RuntimeError("submit() needs an HTTP source; run the docker server")
+            data = json.dumps(submission).encode()
+            request = urllib.request.Request(
+                self.source + "/submit",
+                data=data,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(request) as response:
+                return json.load(response)
