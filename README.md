@@ -33,7 +33,7 @@ The seven verified fields are:
 - **Human review completed:** A reviewer resolved the case. It can be reopened from Case Detail.
 - **Processing:** Verification or reanalysis is running.
 - **Processing failed:** A technical step failed and can be retried.
-- **Not applicable:** The email is not an SI/draft BL comparison.
+- **Not applicable:** The email is unrelated to SI/BL comparison or is a draft-request thread still waiting for comparison documents.
 
 ### Implementations
 
@@ -85,6 +85,8 @@ The hosted browser edition has one **Add emails and documents** function with th
 
 The browser uploader accepts PDF and TXT files up to 5 MB each. TXT documents are read locally in the browser. In single-email mode, Gemini can fill missing TXT fields after the reviewer starts analysis; batch TXT processing remains local and routes incomplete extraction to review. PDFs use Gemini only after processing begins. Batch processing handles 1–10 pairs per run and supports pause, retry, manual pairing, and duplicate skipping. Conflicting booking, OC, or BL identifiers are routed to human review. New emails and completed document batches appear under **New email history**; they do not change the count of 520 original emails.
 
+An email that only asks someone to send a draft BL is treated as awaiting documents and does not create a human verification task. A message that explicitly asks to compare both the SI and draft BL still requires review when either document is missing. This keeps document-request threads out of the exception queue while preserving genuine missing-attachment cases.
+
 Retries show a `Processing` state, then the updated result. Technical failures appear as `Processing failed` with the failed step and Retry action. The competition export maps these to the schema's `NEEDS_REVIEW` status and `unreadable` reason. A scanned document that cannot be transcribed remains `Human review required` in the app. Use [main/USER_TESTING.md](main/USER_TESTING.md) to run and record a human usability session.
 
 The included `Docker/server/score_cli.py` can evaluate a local bundle when ground truth is available:
@@ -94,6 +96,15 @@ The included `Docker/server/score_cli.py` can evaluate a local bundle when groun
 ```
 
 The API also reports field extraction coverage, human-review rate, and processing-failure rate for the current cases. Coverage measures whether fields were found; measuring field extraction **accuracy** requires independently labeled field values. The scorer reports classification and mismatch results against its local ground truth.
+
+To inspect why cases enter review, generate a diagnostic report. Supplying ground truth additionally reports false and missed reviews:
+
+```powershell
+.venv\Scripts\python.exe main\review_diagnostics.py
+.venv\Scripts\python.exe main\review_diagnostics.py --ground-truth Docker\data_v2\ground_truth.json --output review_diagnostics.json
+```
+
+The current 520-email evaluation produces 20 reviews for 20 expected cases: five wrong-document cases, five missing-attachment cases, five unreadable cases, and five missing-value cases. It reports zero false reviews and zero missed reviews while retaining 100% category accuracy and exact mismatch results against the included ground truth.
 
 ## No-billing cloud demo
 

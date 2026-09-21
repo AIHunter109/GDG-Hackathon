@@ -40,9 +40,11 @@ def metrics_for(cases, decisions=None):
                       any(field.get("method", "").startswith("gemini") for group in
                           (c.get("si_fields", {}), c.get("bl_fields", {})) for field in group.values())
                       for c in cases.values())
+    verification_results = dict(Counter(c["status"] for c in comparison))
+    verification_results["NOT_APPLICABLE"] = (verification_results.get("NOT_APPLICABLE", 0) +
+                                                len(cases) - len(comparison))
     return {"total": len(cases), "categories": dict(categories), "statuses": dict(statuses),
-            "verification_results": {**dict(Counter(c["status"] for c in comparison)),
-                                     "NOT_APPLICABLE": len(cases) - len(comparison)},
+            "verification_results": verification_results,
             "comparison_requests": len(comparison),
             "automatically_cleared": sum(c["status"] == "OK" for c in comparison),
             "mismatches": statuses["MISMATCH"],

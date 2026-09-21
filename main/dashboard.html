@@ -1177,6 +1177,13 @@
                             "This email does not require an SI versus draft BL comparison.",
                         ),
                     );
+                else if (c.status === "NOT_APPLICABLE")
+                    box.append(
+                        node(
+                            "p",
+                            "This thread is waiting for comparison documents. It will not enter human review until an SI and draft BL are expected.",
+                        ),
+                    );
                 box.append(
                     add(
                         node("dl"),
@@ -1215,7 +1222,11 @@
                             ),
                         ),
                     );
-                if (c.category === "BL_COMPARISON") renderReview(c, area);
+                if (
+                    c.category === "BL_COMPARISON" &&
+                    c.status !== "NOT_APPLICABLE"
+                )
+                    renderReview(c, area);
                 if (
                     c.category === "BL_COMPARISON" &&
                     c.status !== "PROCESSING" &&

@@ -6,6 +6,7 @@
 submission.json
 evidence.json
 review_decisions.json
+review_diagnostics.json
 dashboard.*.log
 .uv-cache/
 

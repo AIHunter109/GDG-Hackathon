@@ -21,6 +21,7 @@ The browser edition is deployed at [seal-509214.web.app](https://seal-509214.web
 ## Verification and current limits
 
 - Local tests cover classification, file formats, role identification, extraction, normalization, internal validation, comparison, AI response validation, reviewer field confirmation, processing failure handling, and submission shape.
+- Draft-BL request threads without a document pair no longer enter the human-review queue. Explicit SI/BL comparison requests with missing files still do. The local ground-truth evaluation now reports 20 predicted reviews for 20 expected reviews, with zero false or missed reviews; `review_diagnostics.py` breaks reviews down by reason, document type, and field.
 - The local scorer evaluates the complete bundle. Its main score measures the competition output and does not test Gemini or cloud connectivity.
 - The project has an existing Gemini API key. A live synthetic email classification and image-only PDF OCR check passed with `gemini-3.6-flash`. Two `gemini-3.8-flash` calls returned HTTP 503, so `3.6` is the default. Without the key in the app environment the system remains deterministic.
 - AI-transcribed PDFs are sent to review because image-derived text has lower trust. Damaged PDFs with no usable transcription are marked unreadable.
