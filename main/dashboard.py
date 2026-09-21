@@ -13,6 +13,10 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from dotenv_loader import load_dotenv
+
+load_dotenv()
+
 STATIC_DIR = Path(__file__).parent / "dashboard"
 STATIC_ASSETS = {
     "style.css": "text/css",
@@ -57,6 +61,9 @@ def metrics_for(cases, decisions=None):
         and decisions.get(email_id, {}).get("action") != "resolve"
         for email_id, c in cases.items()
     )
+    classification_fallback_count = sum(
+        bool(c.get("classification_fallback")) for c in cases.values()
+    )
     ai_assisted = sum(
         c.get("classification", {}).get("method") == "gemini"
         or c.get("document_identification", {}).get("method") == "gemini_role_detection"
@@ -79,6 +86,7 @@ def metrics_for(cases, decisions=None):
         "automatically_cleared": sum(c["status"] == "OK" for c in comparison),
         "mismatches": statuses["MISMATCH"],
         "human_review": unresolved_reviews,
+        "classification_fallback_count": classification_fallback_count,
         "processing_failures": statuses["PROCESSING_FAILED"],
         "processing": statuses["PROCESSING"],
         "field_extraction_coverage": extracted / (2 * len(FIELDS) * len(paired))
@@ -155,13 +163,6 @@ class Handler(BaseHTTPRequestHandler):
                     ),
                     "text/html",
                 )
-            if parts in (["style.css"], ["dashboard.js"]):
-                asset = Path(__file__).parent / "dashboard" / parts[0]
-                return self._send(
-                    200,
-                    asset.read_text(encoding="utf-8"),
-                    "text/css" if asset.suffix == ".css" else "text/javascript",
-                )
             if parts == ["healthz"]:
                 return self._send(200, {"ok": True})
             if len(parts) == 1 and parts[0] in STATIC_ASSETS:
@@ -235,7 +236,7 @@ class Handler(BaseHTTPRequestHandler):
                     case, record = confirm_value(case, role, field)
                     store.save_case(email_id, case, record)
                     corrections = {"role": role, "field": field}
-                elif choice not in {"confirm", "resolve"}:
+                elif choice not in {"confirm", "resolve", "reopen"}:
                     raise ValueError("Unknown reviewer action")
                 decision = store.save_decision(
                     email_id, choice, payload.get("note", ""), corrections
@@ -266,7 +267,13 @@ class Handler(BaseHTTPRequestHandler):
                 vision = payload.get("vision") is True
                 if vision and not AIService().enabled:
                     raise ValueError("AI vision is not configured for this demo")
-                LOG.info("Retrying %s%s", email_id, " with AI vision" if vision else "")
+                retry_count = case.get("retry_count", 0) + 1
+                LOG.info(
+                    "Retrying %s%s (attempt %d)",
+                    email_id,
+                    " with AI vision" if vision else "",
+                    retry_count,
+                )
                 store.save_processing(
                     email_id,
                     case,
@@ -290,6 +297,7 @@ class Handler(BaseHTTPRequestHandler):
                         "error": str(exc),
                     }
                     record = submission_for_case(case)
+                case["retry_count"] = retry_count
                 store.save_case(email_id, case, record)
                 return self._send(200, {"case": case, "submission": record})
             if action == "select_document":

@@ -54,6 +54,7 @@ class RaiseIssueToHuman:
             "confirm_value",
             "correct",
             "mark_equivalent",
+            "reopen",
             "resolve",
             "select_document",
         }
@@ -63,11 +64,21 @@ class RaiseIssueToHuman:
             raise ValueError("Corrections are required for the correct action")
         with self._lock:
             decisions = self._read()
+            previous_entry = decisions.get(email_id)
+            history = (previous_entry or {}).get("history", [])
+            if previous_entry is not None:
+                # Keep every prior decision as an immutable audit trail entry
+                # rather than silently overwriting it.
+                history = [
+                    *history,
+                    {k: v for k, v in previous_entry.items() if k != "history"},
+                ]
             decisions[email_id] = {
                 "action": action,
                 "note": note,
                 "corrections": corrections or {},
                 "updated_at": datetime.now(timezone.utc).isoformat(),
+                "history": history,
             }
             self.path.write_text(json.dumps(decisions, indent=2), encoding="utf-8")
             return decisions[email_id]

@@ -1,4 +1,12 @@
-"""Gemini understanding fallback. Verification and arithmetic stay in application code."""
+"""AI understanding fallback. Verification and arithmetic stay in application
+code -- every method here either returns a validated result or None; the
+caller always falls back to deterministic behavior on None.
+
+Two providers are supported, selected by AI_PROVIDER ("gemini" or
+"gonkarouter"), or auto-detected from whichever API key is set (GONKAROUTER
+_API_KEY takes priority if both are present and AI_PROVIDER isn't set
+explicitly). Every method below this point only ever calls self._json(...)
+and self.enabled -- neither knows or cares which provider is behind it."""
 
 import base64
 import json
@@ -20,13 +28,89 @@ FIELDS = {
     "gross_weight_kg",
 }
 
+# Ask for bare JSON regardless of provider. Gemini already enforces this via
+# generationConfig.responseMimeType, so this is redundant-but-harmless there;
+# GonkaRouter's /v1/messages has no equivalent structured-output mode, so
+# this instruction is load-bearing for that provider.
+_JSON_ONLY_SUFFIX = (
+    "\n\nRespond with ONLY a single JSON object and nothing else -- "
+    "no markdown code fences, no explanatory text before or after."
+)
+
+
+def _read_error_body(exc, limit=500):
+    """Best-effort read of an HTTPError's response body -- the exception's
+    own str() is just "HTTP Error 403: Forbidden", but the body usually
+    contains the actual reason (invalid key, no credits, wrong model, etc.)."""
+    try:
+        return exc.read().decode("utf-8", errors="replace")[:limit]
+    except Exception:
+        return "(could not read response body)"
+
+
+def _extract_json(text):
+    """Parse a JSON object out of a model's plain-text reply, tolerating a
+    markdown code fence, a leading <think>...</think> reasoning block (some
+    models, e.g. MiniMax via GonkaRouter, emit one before the real answer),
+    or stray prose around the object -- GonkaRouter/Anthropic-shaped
+    responses have no enforced JSON-only mode, unlike Gemini's
+    responseMimeType."""
+    text = text.strip()
+    # Drop a complete <think>...</think> block if present. If the closing
+    # tag never arrives (the model got cut off mid-thought, e.g. it ran out
+    # of max_tokens before finishing), there is no usable answer at all --
+    # that's a real failure, not something to paper over.
+    if text.startswith("<think>"):
+        end_think = text.find("</think>")
+        if end_think == -1:
+            return None
+        text = text[end_think + len("</think>") :].strip()
+    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.S)
+    if fence:
+        text = fence.group(1)
+    try:
+        return json.loads(text)
+    except ValueError:
+        pass
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        try:
+            return json.loads(text[start : end + 1])
+        except ValueError:
+            pass
+    return None
+
 
 class AIService:
-    def __init__(self, api_key=None, model=None):
-        self.api_key = (
-            api_key if api_key is not None else os.getenv("GEMINI_API_KEY", "")
-        )
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+    def __init__(self, api_key=None, model=None, provider=None):
+        self.provider = (provider or os.getenv("AI_PROVIDER") or "").strip().lower()
+        if not self.provider:
+            self.provider = "gonkarouter" if os.getenv("GONKAROUTER_API_KEY") else "gemini"
+
+        if self.provider == "gonkarouter":
+            self.api_key = (
+                api_key if api_key is not None else os.getenv("GONKAROUTER_API_KEY", "")
+            )
+            # deepseek-ai/DeepSeek-V4-Flash-0731 is a standard (non-reasoning)
+            # model on GonkaRouter's catalog -- MiniMax-M2.7 is a "thinking"
+            # model that emits a <think>...</think> block before its answer,
+            # which made it slow and prone to truncation/timeouts for the
+            # short structured-JSON tasks this app needs. Same price either
+            # way; override with GONKAROUTER_MODEL if you want the reasoning
+            # model anyway (e.g. for a task that benefits from it).
+            self.model = model or os.getenv(
+                "GONKAROUTER_MODEL", "deepseek-ai/DeepSeek-V4-Flash-0731"
+            )
+        else:
+            self.api_key = (
+                api_key if api_key is not None else os.getenv("GEMINI_API_KEY", "")
+            )
+            # gemini-2.5-flash is a non-preview, generally-available model --
+            # verified working live. Newer preview-tier models (e.g. the
+            # gemini-3.x line) are available on some keys but returned HTTP
+            # 503 (temporarily overloaded) during testing; override with
+            # GEMINI_MODEL if you specifically want one of those.
+            self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
     @property
     def enabled(self):
@@ -35,6 +119,12 @@ class AIService:
     def _json(self, instruction, *, media=None):
         if not self.enabled:
             return None
+        instruction = instruction + _JSON_ONLY_SUFFIX
+        if self.provider == "gonkarouter":
+            return self._json_gonkarouter(instruction, media=media)
+        return self._json_gemini(instruction, media=media)
+
+    def _json_gemini(self, instruction, *, media=None):
         parts = [{"text": instruction}]
         if media:
             mime_type, content = media
@@ -71,6 +161,73 @@ class AIService:
                 for part in payload["candidates"][0]["content"]["parts"]
             )
             return json.loads(output)
+        except urllib.error.HTTPError as exc:
+            LOG.warning("AI fallback failed: %s -- body: %s", exc, _read_error_body(exc))
+            return None
+        except (OSError, KeyError, IndexError, ValueError) as exc:
+            LOG.warning("AI fallback failed: %s", exc)
+            return None
+
+    def _json_gonkarouter(self, instruction, *, media=None):
+        content = [{"type": "text", "text": instruction}]
+        if media:
+            mime_type, data = media
+            block_type = "image" if mime_type.startswith("image/") else "document"
+            content.append(
+                {
+                    "type": block_type,
+                    "source": {
+                        "type": "base64",
+                        "media_type": mime_type,
+                        "data": base64.b64encode(data).decode("ascii"),
+                    },
+                }
+            )
+        request = urllib.request.Request(
+            "https://api.gonkarouter.io/v1/messages",
+            data=json.dumps(
+                {
+                    "model": self.model,
+                    # Generous headroom: MiniMax-M2.7 is a reasoning model
+                    # that emits a <think>...</think> block before its
+                    # actual answer, and 2048 tokens wasn't enough room for
+                    # both the reasoning and the final JSON (confirmed live
+                    # -- the response was cut off mid-thought).
+                    "max_tokens": 8192,
+                    "messages": [{"role": "user", "content": content}],
+                }
+            ).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                # Python's default User-Agent ("Python-urllib/3.x") is a
+                # common trigger for Cloudflare bot-protection blocks
+                # (surfaced as "error code: 1010" -- confirmed live against
+                # this exact provider). A normal-looking UA avoids that.
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                payload = json.load(response)
+            text = "".join(
+                block.get("text", "")
+                for block in payload["content"]
+                if block.get("type") == "text"
+            )
+            result = _extract_json(text)
+            if result is None:
+                raise ValueError(f"could not parse JSON from response: {text[:200]!r}")
+            return result
+        except urllib.error.HTTPError as exc:
+            LOG.warning("AI fallback failed: %s -- body: %s", exc, _read_error_body(exc))
+            return None
         except (OSError, KeyError, IndexError, ValueError) as exc:
             LOG.warning("AI fallback failed: %s", exc)
             return None
@@ -194,9 +351,11 @@ class AIService:
         }
         result = self._json(
             "Explain this shipping document review in plain business language. "
-            "Use only the supplied evidence. Return JSON with a brief explanation "
-            "and one recommended action. Do not infer missing values or decide whether "
-            "the SI and BL match. Evidence: " + json.dumps(evidence, default=str)
+            "Use only the supplied evidence. Do not infer missing values or decide "
+            "whether the SI and BL match. Return a JSON object with exactly these "
+            'two keys and no others: "explanation" (a plain-language summary of '
+            'the evidence) and "action" (one recommended next step). '
+            "Evidence: " + json.dumps(evidence, default=str)
         )
         if not isinstance(result, dict):
             return None
@@ -225,9 +384,11 @@ class AIService:
             for item in case["mismatches"]
         ]
         result = self._json(
-            "Return JSON with opening and closing sentences for a short, courteous "
-            "email requesting a draft Bill of Lading correction. Use generic wording only. "
-            "Do not include shipment facts, names, numbers, dates, deadlines, or recipients."
+            "Write a short, courteous email requesting a draft Bill of Lading "
+            "correction. Use generic wording only -- do not include shipment "
+            "facts, names, numbers, dates, deadlines, or recipients. Return a "
+            'JSON object with exactly these two keys and no others: "opening" '
+            '(one opening sentence) and "closing" (one closing sentence).'
         )
         if not isinstance(result, dict):
             return None

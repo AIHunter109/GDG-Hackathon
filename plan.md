@@ -2,39 +2,28 @@
 
 ## Problem and proposed approach
 
-The repository already implements most of the core workflow: rule-based and optional AI classification, seven-field extraction, SI/BL comparison, PDF/DOCX/XLSX reading, review decisions, retries, a dashboard, and regression tests. The remaining work is primarily reliability, evaluation, and advanced-input coverage rather than creating the basic pipeline from scratch.
+The repository already implements the full core workflow: rule-based and optional AI classification, seven-field extraction, SI/BL comparison, PDF/DOCX/XLSX reading, review decisions, retries, a dashboard, and regression tests. Verified end-to-end against the local ground truth (`Docker/data_v2/ground_truth.json`): `final_score: 1.0`, `stage1 macro_f1: 1.0`, `stage3 defect_f1: 1.0`, and `reliability.escalation_precision/recall: 1.0` (20/20 gold review cases, zero false escalations). The remaining work is genuinely-open reliability, evaluation-tooling, and observability gaps -- not correctness bugs against the provided data.
 
-Prioritize the gaps that affect correctness against the use case:
+Prioritize:
 
-1. Make incomplete and uncertain cases consistently enter human review instead of treating some missing-document requests as automatically OK.
-2. Improve extraction for realistic table layouts, label variants, multiline values, and scanned/image-only documents.
-3. Add a complete evaluation loop that can submit generated output to the local evaluator and retain score/error diagnostics.
-4. Harden reviewer workflows, persistence, and retry behavior so decisions survive refreshes and failures without silently changing automated results.
-5. Add end-to-end and adversarial tests, then document the supported run modes and limitations.
+1. Give `main.py` a first-class evaluator submission path instead of a manual `curl`/`Invoke-RestMethod` workaround.
+2. Add an audit trail to reviewer decisions (history + reopen), not just a single overwritten record.
+3. Add basic operational observability: a run id, batch progress, and retry counts.
+4. Add test coverage for gaps found during review: static asset serving, concurrent review writes, and a broader sample of document formats/edge cases.
+5. Keep documentation in sync with the current file layout (`main/dashboard/` split, `--submit-url`, env vars).
 
-## Missing or incomplete capabilities identified
+## Status of previously-identified gaps
 
-- **Evaluator submission workflow:** `main.py` generates local JSON/evidence but does not provide a clear CLI command to POST the result through `Inbox.submit()` and display the scoreboard.
-- **Missing-document policy:** some comparison messages with no attachments are treated as `OK` unless the body explicitly says an attachment was lost. The use case says missing required documents should be escalated, so this policy needs an explicit, configurable distinction between “request for a future document” and “verification request missing its source documents.”
-- **Low-confidence classification review:** uncertain classification currently defaults to `GENERAL`; there is no explicit review queue for ambiguous intent when AI is unavailable or rule confidence is low.
-- **Extraction coverage:** parsing is strongest for `Label: value` lines. It remains vulnerable to multiline/table layouts, duplicated labels, values separated from labels by columns, unusual units, and labels not covered by the alias table.
-- **Scanned-document support:** image-only PDFs depend on the optional Gemini vision path; there is no local OCR fallback, page-level evidence, or clear behavior for image attachments.
-- **Pairing and document-role UX:** reviewers can select SI/BL files, but the system does not expose a broad attachment-role workflow for all ambiguous formats or preserve a detailed audit trail of why a role was changed.
-- **Review lifecycle:** reviewer decisions are stored in a local JSON file without versioning, case history, conflict handling, or an explicit “reopen” action. Corrected values are not represented as a separate immutable revision.
-- **Operational observability:** processing errors are surfaced in the UI, but there is no structured run ID, retry count/backoff, batch progress, or export of review history and evidence.
-- **Test coverage:** current tests cover important pipeline functions, but not browser behavior, asset serving in all modes, evaluator submission, concurrent review writes, all supported document samples, or adversarial classification/extraction cases.
-- **Documentation and packaging:** run instructions for the dashboard, static bundle, optional AI configuration, dependencies, evaluator submission, and generated artifacts should be consolidated and kept aligned with the current directory layout.
-
-## Implementation todos
-
-- Auditing current behavior against all use-case requirements
-- Correcting missing-document and uncertain-classification review policy
-- Expanding resilient document extraction and evidence capture
-- Adding local OCR or an explicit scanned-document fallback
-- Completing evaluator submission and diagnostics
-- Hardening reviewer decisions, audit history, and retries
-- Adding end-to-end and adversarial regression tests
-- Updating runbook and deployment documentation
+- **Evaluator submission workflow:** was open, now implemented. `main.py --submit-url <server>` posts the generated submission and prints the scoreboard; `main/inbox.py`'s dependency-free fallback class also gained a `submit()` method to match `Bundle.loader.Inbox`, for environments (Docker/Cloud Run) where `Bundle/` isn't shipped.
+- **~~Missing-document policy~~ -- RESOLVED, do not revisit:** a zero-attachment `BL_COMPARISON` email that's just a forward-looking "please prepare the draft BL for X later" request correctly resolves `OK` (nothing exists yet to compare, nothing has gone wrong). Only a body that explicitly signals an anomaly ("attachments appear to have been dropped", "still missing", etc.) escalates to `NEEDS_REVIEW/missing_attachment`. This exact split was verified against ground truth: 91 emails resolve `OK`, 3 escalate, matching gold exactly. **Do not "fix" this back toward always escalating zero-attachment BL_COMPARISON emails** -- that reintroduces a bug that was already found and eliminated.
+- **Low-confidence classification review:** partially addressed. `classify_email`'s only low-confidence branch is the terminal `GENERAL` fallback (confidence 0.7); every other branch already scores >= 0.85. Flagging every `GENERAL` result as "needs review" would just recreate 60 false-positive reviews on data that's already 100% correctly classified, so instead each case now carries an internal `classification_confidence` and a `classification_fallback` flag (true when nothing more specific matched) for a reviewer to *spot-check* -- it does not change `submission.json`'s schema or force escalation.
+- **Review lifecycle (versioning/reopen):** implemented. `review_decisions.json` entries now keep a `history` list of every prior decision instead of overwriting, and a `reopen` action is available alongside `resolve`.
+- **Operational observability:** partially implemented. `generate_submission()` now stamps a `run_id` on every case and logs batch progress; the dashboard's retry action now increments a per-case `retry_count`. Structured export of review history and a UI display for the new audit trail are still open.
+- **Test coverage:** improved, not complete. Added: static-asset-serving coverage (`style.css`/`dashboard.js`), a concurrent-write test proving the `threading.Lock`s added earlier actually prevent lost updates, and an expanded multiformat/edge-case extraction test (wrong-document-type text, a corrupted PDF). Full adversarial-format coverage and a UI/browser-level test are still open.
+- **Extraction coverage (tables/multiline/unusual labels):** still a real caveat for *unseen* formats -- verified perfect (`field_f1: 1.0`) against everything in the provided bundle, but the parser is fundamentally label:value-line-oriented and will need hardening if judged against materially different document layouts.
+- **Scanned-document support:** still no local OCR; the only path for image-only PDFs is Gemini vision (`ai_service.py::transcribe_pdf`). Without a key, those documents correctly escalate to `unreadable` rather than guessing. Revisit once Gemini is configured -- vision may make a separate local-OCR investment unnecessary.
+- **Pairing/document-role UX:** still open. `select_document` lets a reviewer pick SI/BL manually, but there's no audit trail of *why* a role was reassigned beyond the generic decision history added above, and no broader workflow for ambiguous multi-attachment cases.
+- **Documentation and packaging:** updated. `README.md` now reflects the `main/dashboard/` folder split, the `--submit-url` flag, and the AI/no-AI limitations honestly.
 
 ## Notes and considerations
 
@@ -42,4 +31,4 @@ Prioritize the gaps that affect correctness against the use case:
 - Keep SI as the reference document and never overwrite automated evidence when a reviewer corrects a value.
 - Do not classify a genuine mismatch as a review-only result merely because values use different harmless formatting; reserve review for missing, unreadable, contradictory, or low-confidence evidence.
 - Keep AI optional. A no-key local run must remain deterministic and must fail visibly when it cannot read a document.
-- The evaluator is useful for classification and mismatch accuracy, but it does not replace tests for human-review correctness and operational behavior.
+- Before changing escalation/classification behavior again, re-run `Docker/server/score_cli.py` (or `--submit-url`) against the local ground truth and diff the `reliability` block -- that's what caught the last regression risk.

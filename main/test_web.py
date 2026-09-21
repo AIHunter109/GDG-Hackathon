@@ -151,6 +151,57 @@ class WebWorkflowTests(unittest.TestCase):
             server.server_close()
             Handler.repository = previous
 
+    def test_static_assets_are_served(self):
+        """Regression test for the bug where dashboard.html referenced
+        style.css/dashboard.js as plain relative paths but the router had
+        no route for them -- both 404'd and the page rendered unstyled
+        with no JavaScript at all."""
+        previous = Handler.repository
+        Handler.repository = MemoryRepository()
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urllib.request.urlopen(base + "/") as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn("text/html", response.headers["Content-Type"])
+            with urllib.request.urlopen(base + "/style.css") as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn("text/css", response.headers["Content-Type"])
+            with urllib.request.urlopen(base + "/dashboard.js") as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn(
+                    response.headers["Content-Type"],
+                    ("application/javascript", "text/javascript"),
+                )
+        finally:
+            server.shutdown()
+            server.server_close()
+            Handler.repository = previous
+
+    def test_reopen_action_is_accepted(self):
+        previous = Handler.repository
+        Handler.repository = MemoryRepository()
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            payload = json.dumps({"action": "reopen", "note": "double-check"}).encode()
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/api/decision/email_demo",
+                payload,
+                {"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request) as response:
+                result = json.load(response)
+            self.assertEqual(result["decision"]["action"], "reopen")
+        finally:
+            server.shutdown()
+            server.server_close()
+            Handler.repository = previous
+
     def test_retry_shows_processing_before_final_result(self):
         previous = Handler.repository
         Handler.repository = MemoryRepository()

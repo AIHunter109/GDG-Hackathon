@@ -1,6 +1,8 @@
 """Focused regression tests for document decisions and submission shape."""
 
 import sys
+import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -8,6 +10,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ai_service import AIService
+from call_for_help import RaiseIssueToHuman
 from classify import classify_email
 from comparator import FIELDS, compare_documents
 from extractor import (
@@ -339,6 +342,97 @@ TOTAL Gross Weight (KG): 21,577 KG""")
             with self.subTest(path=path):
                 fields = extract_fields(read_document(path, inbox))
                 self.assertEqual(set(fields), set(FIELDS))
+
+    def test_wrong_doc_type_and_corrupted_pdf_edge_cases_if_present(self):
+        """Two real edge cases seeded in the bundle: a "_BL.txt" that is
+        actually a Commercial Invoice, and a "_BL.pdf" with a genuinely
+        broken stream (pypdf raises PdfStreamError on it -- note
+        email_499_BL.pdf looks similarly "corrupted" under pdfplumber, but
+        pypdf actually recovers real content from it, so it is correctly
+        NOT part of this bundle's unreadable set; email_511/515 are)."""
+        root = Path(__file__).resolve().parent.parent
+        if not (root / "Bundle" / "attachments").exists():
+            self.skipTest("Local competition bundle unavailable")
+        from Bundle.loader import Inbox
+
+        inbox = Inbox(str(root / "Bundle"))
+        si = read_document("attachments/email_501_SI.txt", inbox)
+        wrong_bl = read_document("attachments/email_501_BL.txt", inbox)
+        self.assertEqual(
+            identify_documents({}, [si, wrong_bl])["reason"], "wrong_doc_type"
+        )
+
+        with self.assertRaises(Exception):
+            read_document("attachments/email_511_BL.pdf", inbox)
+
+        email = inbox.get("email_511")
+        record, case = process_email(email, inbox)
+        self.assertEqual(record["status"], "NEEDS_REVIEW")
+        self.assertEqual(record["review_reason"], "unreadable")
+
+    def test_zero_attachment_forward_request_resolves_ok_not_review(self):
+        """Regression test for the over-escalation bug found and fixed:
+        a plain "please prepare the draft BL later" ask with nothing
+        attached yet must resolve OK, not sit in the review queue."""
+        email = {
+            "email_id": "forward_request",
+            "subject": "TO CONFIRM DOCS",
+            "body": "Dear Team,\n\nPlease assist to send the draft BL for X for checking asap.\n\nThank you.",
+            "attachments": [],
+        }
+        record, case = process_email(email, inbox=None)
+        self.assertEqual(record["category"], "BL_COMPARISON")
+        self.assertEqual(record["status"], "OK")
+        self.assertIsNone(record["review_reason"])
+
+        anomaly_email = {
+            **email,
+            "email_id": "dropped_attachment",
+            "body": "Please compare the SI and draft BL for X and confirm (attachments appear to have been dropped).",
+        }
+        record, case = process_email(anomaly_email, inbox=None)
+        self.assertEqual(record["status"], "NEEDS_REVIEW")
+        self.assertEqual(record["review_reason"], "missing_attachment")
+
+    def test_decision_history_and_reopen(self):
+        """review_decisions.json must keep every prior decision as an audit
+        trail instead of overwriting it, and a resolved case can be
+        reopened."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "review_decisions.json"
+            raiser = RaiseIssueToHuman(path)
+            first = raiser.resolve("email_x", "confirm", note="looks fine")
+            self.assertEqual(first["history"], [])
+            second = raiser.resolve("email_x", "resolve", note="closing it out")
+            self.assertEqual(len(second["history"]), 1)
+            self.assertEqual(second["history"][0]["action"], "confirm")
+            reopened = raiser.resolve("email_x", "reopen", note="need another look")
+            self.assertEqual(reopened["action"], "reopen")
+            self.assertEqual(len(reopened["history"]), 2)
+            self.assertEqual(reopened["history"][-1]["action"], "resolve")
+
+    def test_concurrent_decision_writes_do_not_lose_updates(self):
+        """The threading.Lock around review_decisions.json must prevent a
+        classic read-modify-write race: N threads resolving N different
+        cases concurrently must all survive, none silently dropped."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "review_decisions.json"
+            raiser = RaiseIssueToHuman(path)
+            email_ids = [f"email_{i:03d}" for i in range(30)]
+
+            def resolve_one(email_id):
+                raiser.resolve(email_id, "resolve", note=f"resolved {email_id}")
+
+            threads = [
+                threading.Thread(target=resolve_one, args=(eid,)) for eid in email_ids
+            ]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+            saved = raiser.showIssue()
+            self.assertEqual(set(saved), set(email_ids))
 
 
 if __name__ == "__main__":
