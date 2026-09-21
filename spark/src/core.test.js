@@ -63,10 +63,17 @@ test("dashboard document-check totals exclude non-comparison email", () => {
   assert.equal(metrics.mismatches, 1);
 });
 
-test("non-comparison categories support completion without changing verification data", () => {
+test("non-comparison categories support realistic workflow states", () => {
   const general = { email_id: "general", category: "GENERAL", status: "OK" };
-  const completed = applyReview(general, "complete_category");
-  assert.deepEqual(completed.caseRecord, general);
+  const forwarded = applyReview(general, "update_category_workflow", {
+    workflow_state: "forwarded_to_owner",
+  });
+  assert.deepEqual(forwarded.caseRecord, general);
+  assert.equal(forwarded.corrections.workflow_state, "forwarded_to_owner");
+  assert.throws(
+    () => applyReview(general, "update_category_workflow", { workflow_state: "routed_to_finance" }),
+    /valid workflow status/,
+  );
   assert.throws(
     () => applyReview(syntheticCases().demo_match.case, "complete_category"),
     /verification review actions/,

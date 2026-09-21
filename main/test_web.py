@@ -164,7 +164,7 @@ class WebWorkflowTests(unittest.TestCase):
             server.server_close()
             Handler.repository = previous
 
-    def test_non_comparison_workflow_can_be_completed_and_reopened(self):
+    def test_non_comparison_workflow_supports_validated_states(self):
         previous = Handler.repository
         Handler.repository = MemoryRepository()
         Handler.repository.case["category"] = "INVOICE_QUERY"
@@ -174,18 +174,23 @@ class WebWorkflowTests(unittest.TestCase):
         thread.start()
         base = f"http://127.0.0.1:{server.server_port}"
         try:
-            def post(action):
+            def post(action, workflow_state=None):
+                body = {"action": action}
+                if workflow_state:
+                    body["workflow_state"] = workflow_state
                 request = urllib.request.Request(
                     base + "/api/decision/email_demo",
-                    json.dumps({"action": action}).encode(),
+                    json.dumps(body).encode(),
                     {"Content-Type": "application/json"}, method="POST")
                 with urllib.request.urlopen(request) as response:
                     return json.load(response)
 
-            self.assertEqual(post("complete_category")["decision"]["action"], "complete_category")
-            self.assertEqual(post("reopen_category")["decision"]["action"], "reopen_category")
+            routed = post("update_category_workflow", "routed_to_finance")
+            self.assertEqual(routed["decision"]["corrections"]["workflow_state"], "routed_to_finance")
+            waiting = post("update_category_workflow", "waiting_for_finance")
+            self.assertEqual(waiting["decision"]["corrections"]["workflow_state"], "waiting_for_finance")
             with self.assertRaises(urllib.error.HTTPError) as error:
-                post("reopen_category")
+                post("update_category_workflow", "forwarded_to_owner")
             self.assertEqual(error.exception.code, 400)
             error.exception.close()
         finally:

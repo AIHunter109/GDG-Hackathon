@@ -23,6 +23,12 @@ from review_actions import apply_correction, confirm_value, mark_equivalent, sub
 
 LOG = logging.getLogger(__name__)
 VERIFIED_PERFORMANCE = json.loads((Path(__file__).parent / "verified_performance.json").read_text(encoding="utf-8"))
+CATEGORY_WORKFLOW_STATES = {
+    "SI_REQUEST": {"needs_response", "waiting_for_information", "ready_to_prepare", "response_sent", "completed"},
+    "INVOICE_QUERY": {"needs_review", "routed_to_finance", "waiting_for_finance", "response_sent", "completed"},
+    "GENERAL": {"needs_review", "forwarded_to_owner", "waiting_for_response", "response_sent", "completed"},
+    "SPAM": {"needs_review", "confirmed_spam", "restored_to_inbox", "archived", "completed"},
+}
 
 
 def metrics_for(cases, decisions=None):
@@ -154,6 +160,11 @@ class Handler(BaseHTTPRequestHandler):
                 elif choice == "complete_category":
                     if case.get("category") == "BL_COMPARISON":
                         raise ValueError("Document comparisons use verification review actions")
+                elif choice == "update_category_workflow":
+                    workflow_state = payload.get("workflow_state")
+                    if workflow_state not in CATEGORY_WORKFLOW_STATES.get(case.get("category"), set()):
+                        raise ValueError("Choose a valid workflow status for this category")
+                    corrections = {"workflow_state": workflow_state}
                 elif choice == "reopen_category":
                     if (case.get("category") == "BL_COMPARISON" or
                             store.list_decisions().get(email_id, {}).get("action") != "complete_category"):

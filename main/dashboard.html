@@ -754,32 +754,48 @@
             };
             const CATEGORY_WORKFLOW = {
                 SI_REQUEST: {
-                    pending: "SI response required",
-                    completed: "SI request handled",
                     title: "Shipping instruction request",
-                    action: "Prepare or request the required shipping instruction and respond to the sender.",
-                    complete: "Mark SI request handled",
+                    defaultState: "needs_response",
+                    states: {
+                        needs_response: ["Response required", "Review the request and determine which shipping information or documents are needed."],
+                        waiting_for_information: ["Waiting for shipment information", "The sender or shipment owner must provide missing details before work can continue."],
+                        ready_to_prepare: ["Ready to prepare SI", "The required details are available and the shipping instruction can be prepared."],
+                        response_sent: ["Response sent", "A response or shipping instruction was sent; monitor for any reply."],
+                        completed: ["SI request completed", "The request is complete and requires no further action."],
+                    },
                 },
                 INVOICE_QUERY: {
-                    pending: "Finance follow-up required",
-                    completed: "Invoice query handled",
                     title: "Invoice query",
-                    action: "Review the invoice or payment question and route it to the finance owner.",
-                    complete: "Mark invoice query handled",
+                    defaultState: "needs_review",
+                    states: {
+                        needs_review: ["Finance review required", "Review the invoice or payment question and identify the finance owner."],
+                        routed_to_finance: ["Routed to finance", "The query has been assigned to finance for investigation."],
+                        waiting_for_finance: ["Waiting for finance response", "Finance is reviewing the query; follow up if the response is overdue."],
+                        response_sent: ["Response sent", "The finance response was sent to the requester; monitor for follow-up."],
+                        completed: ["Invoice query completed", "The invoice or payment query is resolved."],
+                    },
                 },
                 GENERAL: {
-                    pending: "Message review required",
-                    completed: "General email handled",
                     title: "General email",
-                    action: "Read the message, respond or forward it to the appropriate owner, then mark it handled.",
-                    complete: "Mark general email handled",
+                    defaultState: "needs_review",
+                    states: {
+                        needs_review: ["Message review required", "Read the message and decide whether to respond, forward, or archive it."],
+                        forwarded_to_owner: ["Forwarded to owner", "The message has been assigned to the appropriate owner."],
+                        waiting_for_response: ["Waiting for response", "An owner or external party must respond before this task can continue."],
+                        response_sent: ["Response sent", "A response was sent; monitor for any follow-up."],
+                        completed: ["General email completed", "The message has been handled and requires no further action."],
+                    },
                 },
                 SPAM: {
-                    pending: "Spam confirmation required",
-                    completed: "Spam confirmed",
                     title: "Spam review",
-                    action: "Confirm the classification before archiving or removing the message from the work queue.",
-                    complete: "Confirm spam and mark handled",
+                    defaultState: "needs_review",
+                    states: {
+                        needs_review: ["Spam review required", "Review the sender and content before taking action."],
+                        confirmed_spam: ["Confirmed as spam", "The classification was confirmed and the message is ready to archive."],
+                        restored_to_inbox: ["Restored to inbox", "A reviewer challenged the spam classification and returned the message for normal handling."],
+                        archived: ["Spam archived", "The spam message was archived or removed from the active queue."],
+                        completed: ["Spam review completed", "The spam review is complete and requires no further action."],
+                    },
                 },
             };
             const $ = (id) => document.getElementById(id);
@@ -841,11 +857,25 @@
                         .replace(/\b\w/g, (c) => c.toUpperCase()) || "—"
                 );
             }
+            function categoryWorkflowState(c) {
+                const config = CATEGORY_WORKFLOW[c.category],
+                    decision = state.decisions[c.email_id];
+                if (!config) return null;
+                if (decision?.action === "complete_category") return "completed";
+                if (decision?.action === "update_category_workflow" &&
+                    config.states[decision.corrections?.workflow_state])
+                    return decision.corrections.workflow_state;
+                return config.defaultState;
+            }
+            function categoryWorkflowInfo(c) {
+                const config = CATEGORY_WORKFLOW[c.category],
+                    workflowState = categoryWorkflowState(c);
+                return { config, workflowState, label: config?.states[workflowState]?.[0] || "Email action required",
+                    guidance: config?.states[workflowState]?.[1] || "Review this email." };
+            }
             function resultLabel(c) {
                 return c.category !== "BL_COMPARISON"
-                    ? state.decisions[c.email_id]?.action === "complete_category"
-                        ? CATEGORY_WORKFLOW[c.category]?.completed || "Email handled"
-                        : CATEGORY_WORKFLOW[c.category]?.pending || "Email action required"
+                    ? categoryWorkflowInfo(c).label
                     : c.status === "NEEDS_REVIEW" &&
                         state.decisions[c.email_id]?.action === "resolve"
                       ? "Human review completed"
@@ -853,7 +883,7 @@
             }
             function resultKey(c) {
                 if (c.category !== "BL_COMPARISON")
-                    return state.decisions[c.email_id]?.action === "complete_category"
+                    return categoryWorkflowState(c) === "completed"
                         ? "CATEGORY_COMPLETED"
                         : "CATEGORY_PENDING";
                 return c.category === "BL_COMPARISON" &&
@@ -1105,8 +1135,8 @@
                 if (!Object.keys(reasons).length) $("review-reasons").append(metric("No active reviews", 0));
                 const workflowCards = Object.entries(CATEGORY_WORKFLOW).map(([category, config]) => {
                     const categoryCases = cases.filter(([, c]) => c.category === category);
-                    const pending = categoryCases.filter(([id]) =>
-                        state.decisions[id]?.action !== "complete_category").length;
+                    const pending = categoryCases.filter(([, c]) =>
+                        categoryWorkflowState(c) !== "completed").length;
                     return filterMetric(
                         `${config.title} · ${pending} pending`,
                         categoryCases.length,
@@ -1456,9 +1486,7 @@
                     box.append(
                         node(
                             "p",
-                            state.decisions[id]?.action === "complete_category"
-                                ? "This category task has been completed. Reopen it if more follow-up is needed."
-                                : "Next action: " + CATEGORY_WORKFLOW[c.category].action,
+                            "Next action: " + categoryWorkflowInfo(c).guidance,
                         ),
                     );
                 else if (c.status === "NOT_APPLICABLE")
@@ -1513,23 +1541,31 @@
                 renderSource(c, e, area);
             }
             function renderCategoryWorkflow(c, area) {
-                const config = CATEGORY_WORKFLOW[c.category],
-                    completed = state.decisions[c.email_id]?.action === "complete_category",
+                const { config, workflowState, label, guidance } = categoryWorkflowInfo(c),
                     panel = section(config.title),
+                    stateRow = node("div", "", "toolbar"),
+                    stateSelect = node("select"),
                     actions = node("div", "", "actions");
-                panel.append(
-                    node("p", completed ? config.completed : config.pending, "notice"),
-                    node("p", completed
-                        ? "The reviewer completed this category task. The original email remains available below."
-                        : config.action),
-                );
-                if (completed)
-                    actions.append(button("Reopen task", () => decision(c.email_id, "reopen_category"), "primary"));
-                else {
-                    if (c.category !== "SPAM")
-                        actions.append(button("Prepare response draft", () => showCategoryDraft(c, panel)));
-                    actions.append(button(config.complete, () => decision(c.email_id, "complete_category"), "primary"));
+                stateSelect.setAttribute("aria-label", "Workflow status");
+                for (const [value, details] of Object.entries(config.states)) {
+                    const optionNode = node("option", details[0]);
+                    optionNode.value = value;
+                    stateSelect.append(optionNode);
                 }
+                stateSelect.value = workflowState;
+                stateRow.append(
+                    add(node("label", "Workflow status ", "filter-field"), stateSelect),
+                    button("Save workflow status", () => decision(c.email_id, "update_category_workflow", {
+                        workflow_state: stateSelect.value,
+                    }), "small-btn primary"),
+                );
+                panel.append(
+                    node("p", label, "notice"),
+                    node("p", guidance),
+                    stateRow,
+                );
+                if (c.category !== "SPAM")
+                    actions.append(button("Prepare response draft", () => showCategoryDraft(c, panel)));
                 actions.append(button("View full email", openEmailSource));
                 panel.append(actions);
                 area.append(panel);

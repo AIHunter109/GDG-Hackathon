@@ -107,7 +107,7 @@ class CloudRepository:
     def save_decision(self, email_id, action, note="", corrections=None):
         from datetime import datetime, timezone
         if action not in {"confirm", "confirm_value", "correct", "mark_equivalent", "resolve", "reopen",
-                          "select_document", "complete_category", "reopen_category"}:
+                          "select_document", "complete_category", "reopen_category", "update_category_workflow"}:
             raise ValueError("Unknown reviewer action")
         decision = {"action": action, "note": note, "corrections": corrections or {},
                     "updated_at": datetime.now(timezone.utc).isoformat()}

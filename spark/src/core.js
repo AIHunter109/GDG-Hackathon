@@ -3,6 +3,13 @@ export const FIELDS = [
   "port_of_discharge", "container_count", "gross_weight_kg",
 ];
 
+export const CATEGORY_WORKFLOW_STATES = {
+  SI_REQUEST: ["needs_response", "waiting_for_information", "ready_to_prepare", "response_sent", "completed"],
+  INVOICE_QUERY: ["needs_review", "routed_to_finance", "waiting_for_finance", "response_sent", "completed"],
+  GENERAL: ["needs_review", "forwarded_to_owner", "waiting_for_response", "response_sent", "completed"],
+  SPAM: ["needs_review", "confirmed_spam", "restored_to_inbox", "archived", "completed"],
+};
+
 const LABELS = {
   shipper: "Shipper", consignee: "Consignee", notify_party: "Notify party",
   port_of_loading: "Port of loading", port_of_discharge: "Port of discharge",
@@ -106,6 +113,12 @@ export function applyReview(caseRecord, action, payload = {}) {
     bl.method = "reviewer_equivalence";
     corrections.field = field;
     return { caseRecord: recompare(result), corrections };
+  }
+  if (action === "update_category_workflow") {
+    if (!CATEGORY_WORKFLOW_STATES[result.category]?.includes(payload.workflow_state))
+      throw new Error("Choose a valid workflow status for this category");
+    corrections.workflow_state = payload.workflow_state;
+    return { caseRecord: result, corrections };
   }
   if (["complete_category", "reopen_category"].includes(action)) {
     if (result.category === "BL_COMPARISON") throw new Error("Document comparisons use verification review actions");

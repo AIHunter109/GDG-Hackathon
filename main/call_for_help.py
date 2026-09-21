@@ -31,7 +31,7 @@ class RaiseIssueToHuman:
 
     def resolve(self, email_id, action, *, note="", corrections=None):
         allowed = {"confirm", "confirm_value", "correct", "mark_equivalent", "resolve", "reopen",
-                   "select_document", "complete_category", "reopen_category"}
+                   "select_document", "complete_category", "reopen_category", "update_category_workflow"}
         if action not in allowed:
             raise ValueError(f"Unknown reviewer action: {action}")
         if action == "correct" and not corrections:

@@ -15,7 +15,7 @@ The seven verified fields are:
 ## What the system provides
 
 - **Email classification:** separates document comparisons, SI requests, invoice queries, general email, and spam.
-- **Category workflows:** SI requests enter a response queue, invoice queries enter finance follow-up, general messages require review or routing, and spam requires confirmation. Reviewers can prepare response drafts, mark tasks handled, and reopen completed tasks.
+- **Category workflows:** SI requests can move through response required, waiting for information, ready to prepare, response sent, and completed. Invoice queries support review, finance routing, waiting, response sent, and completion. General email supports review, forwarding, waiting, response sent, and completion. Spam can be reviewed, confirmed, restored to the inbox, archived, or completed.
 - **Document processing:** reads TXT, XLSX, DOCX, and PDF in the Python pipeline. Native extraction runs first; Gemini is used only for uncertain intent, ambiguous document roles, unfamiliar labels, image-only PDFs, requested review explanations, and optional correction-email wording.
 - **Deterministic verification:** normalizes the seven fields, checks shipment identifiers and document totals, then reports no mismatch, mismatch, human review, processing, or processing failure. AI does not make the final comparison decision.
 - **Reviewer workspace:** centers the main workflow on verifying documents and reviewing exceptions. Four operational totals, concise validation evidence, verification outcomes, human-review reasons, filters, the original email dataset, and new-submission history remain visible without turning the workspace into a generic analytics page.
@@ -39,7 +39,7 @@ The seven verified fields are:
 - **Human review completed:** A reviewer resolved the case. It can be reopened from Case Detail.
 - **Processing:** Verification or reanalysis is running.
 - **Processing failed:** A technical step failed and can be retried.
-- **Category action pending:** An SI request, invoice query, general message, or spam classification needs its category-specific reviewer action.
+- **Category action pending:** An SI request, invoice query, general message, or spam classification is in one of its active category-specific workflow states.
 - **Category action completed:** A reviewer handled the category task. It can be reopened from Case Detail.
 - **Awaiting comparison documents:** A document-comparison thread is waiting for an actionable SI and draft BL pair.
 
@@ -122,7 +122,7 @@ The concise **Validation Results** section shows emails evaluated, expected revi
 
 The **Verification Overview** focuses on document checks: verified with no mismatch, mismatch detected, and human review required. **Other Email Workflows** shows SI requests, invoice queries, general messages, and spam with their pending workload; selecting a card opens that queue. **Human Review Reasons** groups unresolved document cases into wrong document, missing attachment, missing value, unreadable document, or other.
 
-Case Detail gives every category a useful workflow. SI requests can produce a response draft and be marked handled. Invoice queries can be acknowledged and routed to finance. General messages can be reviewed, drafted, routed, and completed. Spam can be confirmed before removal from the queue. Completed category tasks can be reopened. These reviewer decisions are stored separately and do not change the competition classification or SI/BL verification output.
+Case Detail gives every category a state selector with realistic intermediate steps. Reviewers can save the current state, create response drafts where appropriate, and move a task backward or forward as work changes. These reviewer decisions are stored separately and do not change the original competition classification or SI/BL verification output.
 
 Search, category, workflow status, and date filters narrow the email table. The date choices are **Today**, **Last 7 Days**, **Last 30 Days**, **All Time**, and **Custom range**. Records without meaningful timestamps are excluded instead of assigned invented dates. The seeded validation snapshot does not produce artificial Daily/Weekly/Monthly charts. Each compact table row shows the subject with its sender underneath, category, workflow status, attachment count, updated time, and the next action.
 
