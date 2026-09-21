@@ -653,18 +653,9 @@
                                 <option value="SPAM">Spam</option>
                             </select>
                         </label>
-                        <label class="filter-field">Status
+                        <label class="filter-field">Workflow status
                             <select id="status-filter">
                                 <option value="all">All statuses</option>
-                                <option value="PROCESSING">Processing</option>
-                                <option value="OK">No mismatch detected</option>
-                                <option value="MISMATCH">Mismatch detected</option>
-                                <option value="NEEDS_REVIEW">Human review required</option>
-                                <option value="RESOLVED_REVIEW">Human review completed</option>
-                                <option value="PROCESSING_FAILED">Processing failed</option>
-                                <option value="CATEGORY_PENDING">Category action pending</option>
-                                <option value="CATEGORY_COMPLETED">Category action completed</option>
-                                <option value="NOT_APPLICABLE">Awaiting comparison documents</option>
                             </select>
                         </label>
                         <label class="filter-field">Date
@@ -1048,12 +1039,51 @@
                 };
                 return card;
             }
+            function populateStatusFilter(preferred = "all") {
+                const select = $("status-filter"),
+                    category = $("category-filter").value;
+                select.replaceChildren();
+                const all = node("option", "All statuses");
+                all.value = "all";
+                select.append(all);
+                if (category === "all" || category === "BL_COMPARISON") {
+                    const group = node("optgroup");
+                    group.label = "Document comparison";
+                    [
+                        ["PROCESSING", "Processing"],
+                        ["OK", "No mismatch detected"],
+                        ["MISMATCH", "Mismatch detected"],
+                        ["NEEDS_REVIEW", "Human review required"],
+                        ["RESOLVED_REVIEW", "Human review completed"],
+                        ["PROCESSING_FAILED", "Processing failed"],
+                        ["NOT_APPLICABLE", "Awaiting comparison documents"],
+                    ].forEach(([value, label]) => {
+                        const optionNode = node("option", label);
+                        optionNode.value = value;
+                        group.append(optionNode);
+                    });
+                    select.append(group);
+                }
+                for (const [workflowCategory, config] of Object.entries(CATEGORY_WORKFLOW)) {
+                    if (category !== "all" && category !== workflowCategory) continue;
+                    const group = node("optgroup");
+                    group.label = config.title;
+                    for (const [workflowState, details] of Object.entries(config.states)) {
+                        const optionNode = node("option", details[0]);
+                        optionNode.value = `WORKFLOW:${workflowCategory}:${workflowState}`;
+                        group.append(optionNode);
+                    }
+                    select.append(group);
+                }
+                select.value = Array.from(select.options).some((optionNode) => optionNode.value === preferred)
+                    ? preferred : "all";
+            }
             function applySummaryFilter(key, { category = "all", status = "all", reason = null } = {}) {
                 state.summaryFilter = key;
                 state.reasonFilter = reason;
                 $("search").value = "";
                 $("category-filter").value = category;
-                $("status-filter").value = status;
+                populateStatusFilter(status);
                 $("date-filter").value = "all";
                 $("date-from-field").classList.add("hidden");
                 $("date-to-field").classList.add("hidden");
@@ -1158,10 +1188,12 @@
                         return false;
                     const e = c.email || {},
                         key = resultKey(c);
-                    const statusMatch =
-                        status === "all" ||
-                        (status === "NEEDS_REVIEW" && unresolved(id, c)) ||
-                        status === key;
+                    const workflowParts = status.startsWith("WORKFLOW:") ? status.split(":") : null;
+                    const statusMatch = workflowParts
+                        ? c.category === workflowParts[1] && categoryWorkflowState(c) === workflowParts[2]
+                        : status === "all" ||
+                          (status === "NEEDS_REVIEW" && unresolved(id, c)) ||
+                          status === key;
                     const reasonCode = ["wrong_doc_type", "missing_attachment", "unreadable", "missing_value"].includes(c.review_reason)
                         ? c.review_reason : "other";
                     return (
@@ -2302,7 +2334,10 @@
             $("review-exceptions").onclick = () =>
                 applySummaryFilter("summary:review", { status: "NEEDS_REVIEW" });
             $("search").oninput = renderAfterManualFilter;
-            $("category-filter").onchange = renderAfterManualFilter;
+            $("category-filter").onchange = () => {
+                populateStatusFilter();
+                renderAfterManualFilter();
+            };
             $("status-filter").onchange = renderAfterManualFilter;
             $("date-filter").onchange = () => {
                 state.reasonFilter = null;
@@ -2319,7 +2354,7 @@
                 state.summaryFilter = null;
                 $("search").value = "";
                 $("category-filter").value = "all";
-                $("status-filter").value = "all";
+                populateStatusFilter();
                 $("date-filter").value = "all";
                 $("date-from").value = "";
                 $("date-to").value = "";
@@ -2327,6 +2362,7 @@
                 $("date-to-field").classList.add("hidden");
                 renderDashboard();
             };
+            populateStatusFilter();
             window.addEventListener("hashchange", route);
             if (window.SPARK_MODE)
                 window.addEventListener("spark-case-added", async () => {
