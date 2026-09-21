@@ -55,6 +55,30 @@ The seven verified fields are:
 - **Attachments:** Original binaries stay local; extracted text is private in Firestore.
 - **Deployment:** Firebase Hosting on the Spark plan.
 
+### Where each function is implemented
+
+- [main/classify.py](main/classify.py) classifies email intent using subject, body, and attachment-name evidence.
+- [main/extractor.py](main/extractor.py) reads documents, identifies SI and draft BL roles, extracts and normalizes fields, and validates shipment identifiers and document totals.
+- [main/comparator.py](main/comparator.py) compares only the seven official normalized fields.
+- [main/main.py](main/main.py) coordinates classification, extraction, validation, fallback AI, status decisions, and competition output.
+- [main/ai_service.py](main/ai_service.py) contains the validated Gemini fallbacks for uncertain intent, document roles, unfamiliar labels, PDF transcription, and review explanations.
+- [main/review_actions.py](main/review_actions.py) applies reviewer confirmation, correction, and equivalence decisions before rerunning deterministic comparison.
+- [main/dashboard.py](main/dashboard.py) and [main/dashboard.html](main/dashboard.html) provide the local API, Dashboard, Case Detail, filters, evidence views, retry actions, and review workflow.
+- [spark/src/app.js](spark/src/app.js) connects the hosted interface to Google sign-in, private Firestore records, Firebase AI Logic, reanalysis, and new-email history.
+- [spark/src/batch.js](spark/src/batch.js) and [spark/src/batch_ui.js](spark/src/batch_ui.js) implement mixed-file and folder pairing, preview, manual pairing, limits, pause, retry, and duplicate skipping.
+- [spark/firestore.rules](spark/firestore.rules) restricts the original dataset and reviewer workspace to the verified owner account.
+- [main/review_diagnostics.py](main/review_diagnostics.py) reports why cases enter human review and, when ground truth is supplied, counts false and missed reviews.
+
+### Python pipeline decision order
+
+1. Classify the email. A low-confidence rules result can use Gemini, but only a validated high-confidence response replaces it.
+2. For document-comparison emails, determine whether the thread is waiting for documents or contains an actionable SI/BL comparison request.
+3. Read the attachments, identify the SI and draft BL, and extract the seven fields. Native parsing runs before AI fallback.
+4. Validate strong shipment identifiers and internal container/weight totals.
+5. Require human review when a necessary document or value is missing, a document is unreadable, roles or identifiers conflict, evidence is inconsistent, or extraction remains uncertain.
+6. When evidence is complete and dependable, compare normalized SI and draft BL values. Any difference produces **Mismatch detected**; otherwise the result is **No mismatch detected**.
+7. Rerun steps 4–6 after a reviewer correction, confirmation, equivalence decision, document-role selection, or retry.
+
 ## Run on Windows
 
 ```powershell
