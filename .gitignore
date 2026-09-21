@@ -30,6 +30,7 @@ env/
 /spark/dist/
 /spark/private/
 /spark/index.html
+!.env.example
 
 # Editor and operating-system files
 .vscode/

@@ -2,8 +2,8 @@
 
 import json
 import sys
-import threading
 import tempfile
+import threading
 import unittest
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -11,24 +11,39 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from comparator import compare_documents
-from dashboard import Handler
-from extractor import extract_fields
 from call_for_help import RaiseIssueToHuman
+from comparator import compare_documents
+from dashboard import Handler, _needs_ai_review, _process_ai_review
+from extractor import extract_fields
 
 
 class MemoryRepository:
     def __init__(self):
-        self.email = {"email_id": "email_demo", "from": "operator@example.com", "subject": "Check draft BL",
-                      "body": "Please compare SI and BL", "attachments": ["attachments/si.txt", "attachments/bl.txt"]}
-        self.files = {"attachments/si.txt": b"Shipper: ACME\nConsignee: Buyer\nNotify: Buyer\nPOL: Klang\nPOD: Callao\nContainers: 2\nGross Weight: 400 KG",
-                      "attachments/bl.txt": b"Shipper: ACME\nConsignee: Buyer\nNotify: Buyer\nPOL: Klang\nPOD: Callao\nContainers: 3\nGross Weight: 400 KG"}
-        si, bl = [extract_fields({"path": path, "text": data.decode(), "file_type": ".txt"})
-                  for path, data in self.files.items()]
-        self.case = {"email_id": "email_demo", "email": self.email, "category": "BL_COMPARISON",
-                     "classification": {"category": "BL_COMPARISON", "confidence": .98},
-                     "status": "MISMATCH", "si_fields": si, "bl_fields": bl,
-                     "mismatches": compare_documents(si, bl)["mismatches"]}
+        self.email = {
+            "email_id": "email_demo",
+            "from": "operator@example.com",
+            "subject": "Check draft BL",
+            "body": "Please compare SI and BL",
+            "attachments": ["attachments/si.txt", "attachments/bl.txt"],
+        }
+        self.files = {
+            "attachments/si.txt": b"Shipper: ACME\nConsignee: Buyer\nNotify: Buyer\nPOL: Klang\nPOD: Callao\nContainers: 2\nGross Weight: 400 KG",
+            "attachments/bl.txt": b"Shipper: ACME\nConsignee: Buyer\nNotify: Buyer\nPOL: Klang\nPOD: Callao\nContainers: 3\nGross Weight: 400 KG",
+        }
+        si, bl = [
+            extract_fields({"path": path, "text": data.decode(), "file_type": ".txt"})
+            for path, data in self.files.items()
+        ]
+        self.case = {
+            "email_id": "email_demo",
+            "email": self.email,
+            "category": "BL_COMPARISON",
+            "classification": {"category": "BL_COMPARISON", "confidence": 0.98},
+            "status": "MISMATCH",
+            "si_fields": si,
+            "bl_fields": bl,
+            "mismatches": compare_documents(si, bl)["mismatches"],
+        }
         self.decision = {}
 
     def list_cases(self):
@@ -55,8 +70,15 @@ class MemoryRepository:
         self.case = {**case, "status": "PROCESSING", "processing_step": step}
 
     def save_decision(self, email_id, action, note="", corrections=None):
-        self.decision[email_id] = {"action": action, "note": note, "corrections": corrections or {}}
+        self.decision[email_id] = {
+            "action": action,
+            "note": note,
+            "corrections": corrections or {},
+        }
         return self.decision[email_id]
+
+    def update_ai_review(self, email_id, ai_review):
+        self.case = {**self.case, "ai_review": ai_review}
 
 
 class WebWorkflowTests(unittest.TestCase):
@@ -64,15 +86,31 @@ class WebWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             decisions = RaiseIssueToHuman(Path(directory) / "decisions.json")
             decisions.resolve("email_demo", "confirm", note="Mismatch checked")
-            decisions.resolve("email_demo", "update_assignment", corrections={
-                "reviewer": "Alex", "priority": "high", "due": "2026-09-25"})
-            result = decisions.resolve("email_demo", "reviewer_feedback", corrections={
-                "outcome": "corrected", "cause": "extraction", "comment": "Weight fixed"})
+            decisions.resolve(
+                "email_demo",
+                "update_assignment",
+                corrections={
+                    "reviewer": "Alex",
+                    "priority": "high",
+                    "due": "2026-09-25",
+                },
+            )
+            result = decisions.resolve(
+                "email_demo",
+                "reviewer_feedback",
+                corrections={
+                    "outcome": "corrected",
+                    "cause": "extraction",
+                    "comment": "Weight fixed",
+                },
+            )
             self.assertEqual(result["action"], "confirm")
             self.assertEqual(result["assignment"]["reviewer"], "Alex")
             self.assertEqual(result["feedback"]["cause"], "extraction")
-            self.assertEqual([item["action"] for item in result["activity"]],
-                             ["confirm", "update_assignment", "reviewer_feedback"])
+            self.assertEqual(
+                [item["action"] for item in result["activity"]],
+                ["confirm", "update_assignment", "reviewer_feedback"],
+            )
 
     def test_inbox_preview_and_reviewer_correction(self):
         previous = Handler.repository
@@ -85,16 +123,33 @@ class WebWorkflowTests(unittest.TestCase):
             with urllib.request.urlopen(base + "/api/cases") as response:
                 cases = json.load(response)
             self.assertEqual(cases["metrics"]["mismatches"], 1)
-            self.assertEqual(cases["features"]["verified_performance"]["expected_reviews"], 20)
-            self.assertNotIn("overall_accuracy", cases["features"]["verified_performance"])
+            self.assertEqual(
+                cases["features"]["verified_performance"]["expected_reviews"], 20
+            )
+            self.assertNotIn(
+                "overall_accuracy", cases["features"]["verified_performance"]
+            )
             with urllib.request.urlopen(base + "/api/email/email_demo") as response:
                 self.assertEqual(json.load(response)["subject"], "Check draft BL")
-            with urllib.request.urlopen(base + "/api/document/email_demo/0") as response:
+            with urllib.request.urlopen(
+                base + "/api/document/email_demo/0"
+            ) as response:
                 self.assertIn("Shipper: ACME", json.load(response)["text"])
-            payload = json.dumps({"action": "correct", "role": "bl", "field": "container_count",
-                                  "value": "2", "note": "Checked source"}).encode()
-            request = urllib.request.Request(base + "/api/decision/email_demo", payload,
-                                             {"Content-Type": "application/json"}, method="POST")
+            payload = json.dumps(
+                {
+                    "action": "correct",
+                    "role": "bl",
+                    "field": "container_count",
+                    "value": "2",
+                    "note": "Checked source",
+                }
+            ).encode()
+            request = urllib.request.Request(
+                base + "/api/decision/email_demo",
+                payload,
+                {"Content-Type": "application/json"},
+                method="POST",
+            )
             with urllib.request.urlopen(request) as response:
                 result = json.load(response)
             self.assertEqual(result["case"]["status"], "OK")
@@ -107,21 +162,82 @@ class WebWorkflowTests(unittest.TestCase):
     def test_confirm_value_endpoint_recompares(self):
         previous = Handler.repository
         Handler.repository = MemoryRepository()
-        Handler.repository.case["bl_fields"]["gross_weight_kg"]["confidence"] = .7
+        Handler.repository.case["bl_fields"]["gross_weight_kg"]["confidence"] = 0.7
         Handler.repository.case["status"] = "NEEDS_REVIEW"
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            payload = json.dumps({"action": "confirm_value", "role": "bl",
-                                  "field": "gross_weight_kg"}).encode()
-            request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/api/decision/email_demo",
-                                             payload, {"Content-Type": "application/json"}, method="POST")
+            payload = json.dumps(
+                {"action": "confirm_value", "role": "bl", "field": "gross_weight_kg"}
+            ).encode()
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/api/decision/email_demo",
+                payload,
+                {"Content-Type": "application/json"},
+                method="POST",
+            )
             with urllib.request.urlopen(request) as response:
                 result = json.load(response)
             self.assertEqual(result["case"]["status"], "MISMATCH")
-            self.assertEqual(result["case"]["bl_fields"]["gross_weight_kg"]["confidence"], 1)
-            self.assertEqual(Handler.repository.decision["email_demo"]["corrections"]["field"], "gross_weight_kg")
+            self.assertEqual(
+                result["case"]["bl_fields"]["gross_weight_kg"]["confidence"], 1
+            )
+            self.assertEqual(
+                Handler.repository.decision["email_demo"]["corrections"]["field"],
+                "gross_weight_kg",
+            )
+        finally:
+            server.shutdown()
+            server.server_close()
+            Handler.repository = previous
+
+    def test_static_assets_are_served(self):
+        """Regression test for the bug where dashboard.html referenced
+        style.css/dashboard.js as plain relative paths but the router had
+        no route for them -- both 404'd and the page rendered unstyled
+        with no JavaScript at all."""
+        previous = Handler.repository
+        Handler.repository = MemoryRepository()
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            with urllib.request.urlopen(base + "/") as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn("text/html", response.headers["Content-Type"])
+            with urllib.request.urlopen(base + "/style.css") as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn("text/css", response.headers["Content-Type"])
+            with urllib.request.urlopen(base + "/dashboard.js") as response:
+                self.assertEqual(response.status, 200)
+                self.assertIn(
+                    response.headers["Content-Type"],
+                    ("application/javascript", "text/javascript"),
+                )
+        finally:
+            server.shutdown()
+            server.server_close()
+            Handler.repository = previous
+
+    def test_reopen_action_is_accepted(self):
+        previous = Handler.repository
+        Handler.repository = MemoryRepository()
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            payload = json.dumps({"action": "reopen", "note": "double-check"}).encode()
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/api/decision/email_demo",
+                payload,
+                {"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request) as response:
+                result = json.load(response)
+            self.assertEqual(result["decision"]["action"], "reopen")
         finally:
             server.shutdown()
             server.server_close()
@@ -134,8 +250,12 @@ class WebWorkflowTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            request = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/api/retry/email_demo",
-                                             b"{}", {"Content-Type": "application/json"}, method="POST")
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/api/retry/email_demo",
+                b"{}",
+                {"Content-Type": "application/json"},
+                method="POST",
+            )
             with urllib.request.urlopen(request) as response:
                 result = json.load(response)
             self.assertTrue(Handler.repository.processing_seen)
@@ -155,11 +275,14 @@ class WebWorkflowTests(unittest.TestCase):
         thread.start()
         base = f"http://127.0.0.1:{server.server_port}"
         try:
+
             def post(action):
                 request = urllib.request.Request(
                     base + "/api/decision/email_demo",
                     json.dumps({"action": action}).encode(),
-                    {"Content-Type": "application/json"}, method="POST")
+                    {"Content-Type": "application/json"},
+                    method="POST",
+                )
                 with urllib.request.urlopen(request) as response:
                     return json.load(response)
 
@@ -190,6 +313,7 @@ class WebWorkflowTests(unittest.TestCase):
         thread.start()
         base = f"http://127.0.0.1:{server.server_port}"
         try:
+
             def post(action, workflow_state=None):
                 body = {"action": action}
                 if workflow_state:
@@ -197,18 +321,61 @@ class WebWorkflowTests(unittest.TestCase):
                 request = urllib.request.Request(
                     base + "/api/decision/email_demo",
                     json.dumps(body).encode(),
-                    {"Content-Type": "application/json"}, method="POST")
+                    {"Content-Type": "application/json"},
+                    method="POST",
+                )
                 with urllib.request.urlopen(request) as response:
                     return json.load(response)
 
             routed = post("update_category_workflow", "routed_to_finance")
-            self.assertEqual(routed["decision"]["corrections"]["workflow_state"], "routed_to_finance")
+            self.assertEqual(
+                routed["decision"]["corrections"]["workflow_state"], "routed_to_finance"
+            )
             waiting = post("update_category_workflow", "waiting_for_finance")
-            self.assertEqual(waiting["decision"]["corrections"]["workflow_state"], "waiting_for_finance")
+            self.assertEqual(
+                waiting["decision"]["corrections"]["workflow_state"],
+                "waiting_for_finance",
+            )
             with self.assertRaises(urllib.error.HTTPError) as error:
                 post("update_category_workflow", "forwarded_to_owner")
             self.assertEqual(error.exception.code, 400)
             error.exception.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            Handler.repository = previous
+
+    def test_ai_review_worker_fills_in_pending_case_and_is_visible_via_api(self):
+        class StubAI:
+            enabled = True
+
+            def review_case(self, case):
+                return {
+                    "assessment": "The gross weight could not be confirmed automatically.",
+                    "proof": "Gross Weight: 400 KG",
+                    "recommended_action": "Confirm the value against the source document.",
+                }
+
+        previous = Handler.repository
+        Handler.repository = MemoryRepository()
+        Handler.repository.case["status"] = "NEEDS_REVIEW"
+        Handler.repository.case["uncertain_fields"] = ["gross_weight_kg"]
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            store = Handler.repository
+            case = store.get_case("email_demo")
+            decisions = store.list_decisions()
+            self.assertTrue(_needs_ai_review(case, decisions, "email_demo"))
+            _process_ai_review(store, StubAI(), "email_demo", case)
+            with urllib.request.urlopen(base + "/api/cases") as response:
+                ai_review = json.load(response)["cases"]["email_demo"]["ai_review"]
+            self.assertEqual(ai_review["status"], "done")
+            self.assertEqual(ai_review["proof"], "Gross Weight: 400 KG")
+            refreshed = store.get_case("email_demo")
+            self.assertFalse(_needs_ai_review(refreshed, decisions, "email_demo"))
         finally:
             server.shutdown()
             server.server_close()

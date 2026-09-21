@@ -640,7 +640,7 @@
                 <div id="new-email-form-slot">
                     <section id="local-upload-card" class="card">
                         <div class="card-head"><h2>Verify documents</h2><span class="badge">Local workspace</span></div>
-                        <p class="muted">Choose only how the verification files are arranged. The app identifies SI/BL pairs, runs document verification, and adds every result to New email history.</p>
+                        <p class="muted">Choose only how the files are arranged. The app identifies SI/BL pairs, classifies other email types such as general or spam, runs the appropriate workflow, and adds every result to New email history.</p>
                         <form id="local-upload-form" class="toolbar">
                             <label class="filter-field">What are you adding?
                                 <select id="local-upload-mode" name="mode">
@@ -655,7 +655,7 @@
                                 <textarea name="body" aria-label="Quick introduction" placeholder="Quick introduction or paste the email text. The app will classify it automatically."></textarea>
                             </div>
                             <div id="local-one-inputs">
-                                <label>Verification files
+                                <label>Files (optional for General, Spam, SI Request, or Invoice Query)
                                     <input name="one_files" type="file" accept=".pdf,.txt,.xlsx,.docx,application/pdf,text/plain" multiple>
                                 </label>
                             </div>
@@ -3161,7 +3161,7 @@
                     return [...groups].map(([key, files]) => ({ key, files }));
                 };
                 const jobs = makeJobs();
-                if (!jobs.length || jobs.some((job) => !job.files.length || job.files.some(({ file }) => !supported.test(file.name) || file.size > 5_000_000))) {
+                if (!jobs.length || jobs.some((job) => job.files.some(({ file }) => !supported.test(file.name) || file.size > 5_000_000))) {
                     status.textContent = "Choose PDF, TXT, XLSX, or DOCX files up to 5 MB each.";
                     return;
                 }
