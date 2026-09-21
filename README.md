@@ -27,26 +27,33 @@ The seven verified fields are:
 
 ### Status meanings
 
-| Status | Meaning |
-| --- | --- |
-| No mismatch detected | All seven available normalized SI and draft BL values agree. |
-| Mismatch detected | At least one verified field differs. |
-| Human review required | A document, value, role, identifier, or AI-derived extraction needs reviewer confirmation. |
-| Human review completed | A reviewer resolved the case; it can be reopened from Case Detail. |
-| Processing | Verification or reanalysis is running. |
-| Processing failed | A technical step failed and can be retried. |
-| Not applicable | The email is not an SI/draft BL comparison. |
+- **No mismatch detected:** All seven available normalized SI and draft BL values agree.
+- **Mismatch detected:** At least one verified field differs.
+- **Human review required:** A document, value, role, identifier, or AI-derived extraction needs reviewer confirmation.
+- **Human review completed:** A reviewer resolved the case. It can be reopened from Case Detail.
+- **Processing:** Verification or reanalysis is running.
+- **Processing failed:** A technical step failed and can be retried.
+- **Not applicable:** The email is not an SI/draft BL comparison.
 
 ### Implementations
 
-| Capability | Local Python app | Hosted Firebase app |
-| --- | --- | --- |
-| Source dataset | Local `Bundle` or compatible URL | 520 private Firestore records |
-| Supported source documents | TXT, XLSX, DOCX, PDF | Existing processed records; new PDF/TXT uploads |
-| AI access | Server-side `GEMINI_API_KEY` | Firebase AI Logic in the signed-in browser |
-| State | Local JSON files | Private Firestore workspace |
-| Attachments | Read from the local bundle | Original binaries stay local; extracted text is private in Firestore |
-| Deployment | Local server or optional Cloud Run | Firebase Hosting on the Spark plan |
+#### Local Python app
+
+- **Source dataset:** Local `Bundle` or a compatible URL.
+- **Supported documents:** TXT, XLSX, DOCX, and PDF.
+- **AI access:** Server-side `GEMINI_API_KEY`.
+- **Saved state:** Local JSON files.
+- **Attachments:** Read directly from the local bundle.
+- **Deployment:** Local server or optional Cloud Run.
+
+#### Hosted Firebase app
+
+- **Source dataset:** 520 private Firestore records.
+- **Supported documents:** Existing processed records and new PDF/TXT uploads.
+- **AI access:** Firebase AI Logic in the signed-in browser.
+- **Saved state:** Private Firestore workspace.
+- **Attachments:** Original binaries stay local; extracted text is private in Firestore.
+- **Deployment:** Firebase Hosting on the Spark plan.
 
 ## Run on Windows
 
