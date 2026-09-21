@@ -3,8 +3,587 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Shipping Verification | Operations</title>
-        <link rel="stylesheet" href="style.css" />
+        <title>SEAL | Shipping Document Verification</title>
+        <style>
+            :root {
+                font:
+                    14px/1.45 system-ui,
+                    -apple-system,
+                    Segoe UI,
+                    sans-serif;
+                color: #142a3b;
+                background: #eef3f6;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                margin: 0;
+            }
+            button,
+            input,
+            select,
+            textarea {
+                font: inherit;
+            }
+            button {
+                cursor: pointer;
+            }
+            button:focus-visible,
+            tr:focus-visible,
+            summary:focus-visible {
+                outline: 3px solid #16879a;
+                outline-offset: 2px;
+            }
+            .shell {
+                max-width: 1510px;
+                margin: auto;
+                padding: 22px 28px 55px;
+            }
+            header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 20px;
+                margin-bottom: 20px;
+            }
+            h1 {
+                font-size: 23px;
+                margin: 0;
+            }
+            h2 {
+                font-size: 20px;
+                margin: 0 0 12px;
+            }
+            h3 {
+                font-size: 16px;
+                margin: 0 0 10px;
+            }
+            p {
+                margin: 8px 0;
+            }
+            .eyebrow {
+                font-size: 11px;
+                letter-spacing: 0.13em;
+                text-transform: uppercase;
+                font-weight: 750;
+                color: #24727b;
+            }
+            .subtitle,
+            .muted {
+                color: #62788a;
+            }
+            .subtitle {
+                margin: 4px 0 0;
+            }
+            .card,
+            .metric {
+                background: #fff;
+                border: 1px solid #dbe5eb;
+                border-radius: 12px;
+                box-shadow: 0 2px 10px #20405708;
+            }
+            .card {
+                padding: 19px;
+                min-width: 0;
+                margin-bottom: 16px;
+            }
+            .metrics {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 10px;
+                margin-bottom: 17px;
+            }
+            .metric {
+                text-align: left;
+                padding: 14px 16px;
+                color: #142a3b;
+            }
+            .metric strong {
+                display: block;
+                font-size: 25px;
+                letter-spacing: -0.035em;
+            }
+            .metric span {
+                color: #597384;
+                font-size: 12px;
+            }
+            .metric.interactive {
+                cursor: pointer;
+                transition:
+                    border-color 120ms ease,
+                    transform 120ms ease;
+            }
+            .metric.interactive:hover,
+            .metric.interactive:focus-visible,
+            .metric.interactive.active {
+                border-color: #16879a;
+                transform: translateY(-1px);
+            }
+            .metric.interactive:focus-visible {
+                outline: 3px solid #16879a;
+                outline-offset: 2px;
+            }
+            .performance-metrics {
+                margin-bottom: 10px;
+            }
+            #overview-card .metrics {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
+            .summary-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+            }
+            .summary-grid .metrics {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .card-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                margin-bottom: 14px;
+            }
+            .card-head h2 {
+                margin: 0;
+            }
+            .header-actions {
+                display: flex;
+                gap: 9px;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+            }
+            .status-strip {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin: -4px 0 16px;
+            }
+            .status-item {
+                border: 1px solid #d5e3e9;
+                border-radius: 20px;
+                background: #f8fbfc;
+                color: #476879;
+                padding: 5px 10px;
+                font-size: 12px;
+                font-weight: 650;
+            }
+            .toolbar,
+            .actions {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                align-items: center;
+            }
+            .toolbar {
+                margin: 0 0 12px;
+            }
+            .batch-inputs {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(240px, 1fr));
+            }
+            .batch-inputs label {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                min-width: 0;
+            }
+            .batch-inputs input {
+                width: 100%;
+            }
+            .filter-field {
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                color: #526f7f;
+                font-weight: 650;
+            }
+            input,
+            select,
+            textarea {
+                border: 1px solid #c9d7df;
+                border-radius: 7px;
+                padding: 8px 10px;
+                background: #fff;
+                color: #193345;
+                min-width: 0;
+            }
+            #search {
+                flex: 1;
+                min-width: 230px;
+            }
+            .small-btn,
+            .actions button,
+            .back {
+                border: 0;
+                border-radius: 7px;
+                padding: 8px 11px;
+                background: #e6eef2;
+                color: #245064;
+                font-weight: 650;
+            }
+            .small-btn.primary,
+            .actions button.primary {
+                background: #0b6976;
+                color: #fff;
+            }
+            .table-scroll {
+                overflow: auto;
+                max-height: 65vh;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            }
+            th,
+            td {
+                text-align: left;
+                vertical-align: top;
+                padding: 12px 9px;
+                border-bottom: 1px solid #e7eef2;
+                overflow-wrap: anywhere;
+            }
+            th {
+                position: sticky;
+                top: 0;
+                background: #f6f9fb;
+                color: #637b8b;
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                z-index: 1;
+            }
+            .master {
+                min-width: 1060px;
+            }
+            .master th:nth-child(1) {
+                width: 32%;
+            }
+            .master th:nth-child(2) {
+                width: 16%;
+            }
+            .master th:nth-child(3) {
+                width: 20%;
+            }
+            .master th:nth-child(4) {
+                width: 9%;
+            }
+            .master th:nth-child(5) {
+                width: 14%;
+            }
+            .master th:nth-child(6) {
+                width: 9%;
+            }
+            tr.clickable {
+                cursor: pointer;
+            }
+            tr.clickable:hover,
+            tr.selected {
+                background: #eaf5f6;
+            }
+            .subject {
+                font-weight: 650;
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+                line-clamp: 2;
+                overflow: hidden;
+            }
+            .secondary-text {
+                font-size: 12px;
+                color: #698090;
+                margin-top: 3px;
+            }
+            .badge {
+                display: inline-block;
+                border-radius: 20px;
+                padding: 3px 8px;
+                font-size: 11px;
+                font-weight: 750;
+                white-space: nowrap;
+                background: #eef3f6;
+                color: #486373;
+            }
+            .badge.OK {
+                background: #e1f5eb;
+                color: #186b4b;
+            }
+            .badge.MISMATCH {
+                background: #fff0dc;
+                color: #9a5711;
+            }
+            .badge.NEEDS_REVIEW {
+                background: #fce7e6;
+                color: #9b3e37;
+            }
+            .badge.PROCESSING_FAILED {
+                background: #f3e9fa;
+                color: #71389a;
+            }
+            .badge.PROCESSING {
+                background: #e7f1fa;
+                color: #265b84;
+            }
+            .badge.CATEGORY_PENDING {
+                background: #edf2ff;
+                color: #3f5d91;
+            }
+            .badge.CATEGORY_COMPLETED {
+                background: #e1f5eb;
+                color: #186b4b;
+            }
+            .badge.BL_COMPARISON {
+                background: #e6f3fb;
+                color: #1a668b;
+            }
+            .back {
+                margin-bottom: 13px;
+            }
+            .case-summary {
+                border: 1px solid #d5e3e9;
+                background: #f6fafb;
+                border-radius: 9px;
+                padding: 17px;
+            }
+            .case-summary.MISMATCH {
+                background: #fff8ec;
+                border-color: #f0d0a4;
+            }
+            .case-summary.NEEDS_REVIEW {
+                background: #fff3f1;
+                border-color: #edc7c1;
+            }
+            .case-summary.PROCESSING_FAILED {
+                background: #f7effb;
+                border-color: #dfc7ee;
+            }
+            .case-summary h2 {
+                margin: 4px 0;
+            }
+            .case-summary dl {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 9px 20px;
+                margin: 16px 0 0;
+            }
+            .case-summary dt {
+                color: #617987;
+                font-size: 12px;
+            }
+            .case-summary dd {
+                margin: 2px 0 0;
+                font-weight: 600;
+                overflow-wrap: anywhere;
+            }
+            .compare th:nth-child(1) {
+                width: 19%;
+            }
+            .compare th:nth-child(2),
+            .compare th:nth-child(3) {
+                width: 32%;
+            }
+            .compare th:nth-child(4) {
+                width: 17%;
+            }
+            .compare tr.mismatch {
+                background: #fff8ec;
+            }
+            .compare tr.uncertain {
+                background: #fff5f4;
+            }
+            .compare .raw {
+                font-weight: 620;
+            }
+            .sub {
+                display: block;
+                color: #647d8c;
+                margin-top: 3px;
+                font-size: 11px;
+            }
+            .result {
+                font-weight: 750;
+            }
+            .result.match {
+                color: #20704f;
+            }
+            .result.mismatch {
+                color: #a65b09;
+            }
+            .result.review {
+                color: #a6423b;
+            }
+            .field-evidence {
+                color: #526f7f;
+                font-size: 12px;
+                margin: 4px 0;
+            }
+            .notice {
+                padding: 11px 13px;
+                background: #e9f5fa;
+                border-radius: 7px;
+                color: #225c77;
+            }
+            .notice.error {
+                background: #fce8e6;
+                color: #8e342f;
+            }
+            .notice.warning {
+                background: #fff2df;
+                color: #805007;
+            }
+            .mismatch-panel {
+                border-left: 4px solid #d18c37;
+                background: #fff9ef;
+                padding: 14px;
+                margin-top: 14px;
+                border-radius: 6px;
+            }
+            .evidence-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+            .evidence-box {
+                padding: 10px;
+                background: #fff;
+                border: 1px solid #e2d8c8;
+                border-radius: 6px;
+            }
+            .evidence-box strong {
+                display: block;
+                margin-bottom: 4px;
+            }
+            .actions {
+                margin-top: 13px;
+            }
+            .form-row {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin: 12px 0;
+            }
+            .form-row > * {
+                flex: 1;
+                min-width: 150px;
+            }
+            .detail-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+            }
+            .detail-grid .card {
+                margin: 0;
+            }
+            details > summary {
+                cursor: pointer;
+                font-weight: 700;
+                font-size: 16px;
+            }
+            details[open] > summary {
+                margin-bottom: 12px;
+            }
+            .email-body,
+            .doc-text,
+            .draft {
+                white-space: pre-wrap;
+                background: #f5f8fa;
+                border: 1px solid #e1eaf0;
+                padding: 13px;
+                border-radius: 8px;
+                max-height: 340px;
+                overflow: auto;
+            }
+            .doc-text {
+                max-height: 430px;
+            }
+            .file-list {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            .file {
+                border: 1px solid #bfd4dd;
+                background: #f4fafb;
+                border-radius: 8px;
+                padding: 9px;
+                text-align: left;
+                min-width: 160px;
+                max-width: 100%;
+                color: #174b5b;
+            }
+            .file small {
+                display: block;
+                color: #5d7b86;
+            }
+            iframe {
+                width: 100%;
+                height: 450px;
+                border: 1px solid #d6e1e8;
+                border-radius: 7px;
+                margin-top: 10px;
+            }
+            .meta {
+                display: grid;
+                grid-template-columns: 105px 1fr;
+                gap: 6px 10px;
+                margin: 10px 0;
+            }
+            .meta dt {
+                color: #6b7f8d;
+            }
+            .meta dd {
+                margin: 0;
+                overflow-wrap: anywhere;
+            }
+            .hidden {
+                display: none !important;
+            }
+            @media (max-width: 1080px) {
+                .metrics {
+                    grid-template-columns: repeat(3, 1fr);
+                }
+                #overview-card .metrics {
+                    grid-template-columns: repeat(3, 1fr);
+                }
+                .case-summary dl {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+                .summary-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+            @media (max-width: 700px) {
+                .shell {
+                    padding: 14px;
+                }
+                .metrics {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+                #overview-card .metrics {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+                header {
+                    display: block;
+                }
+                .header-actions {
+                    justify-content: flex-start;
+                    margin-top: 12px;
+                }
+                .detail-grid,
+                .evidence-grid,
+                .batch-inputs {
+                    grid-template-columns: 1fr;
+                }
+                .case-summary dl {
+                    grid-template-columns: 1fr;
+                }
+                .compare {
+                    min-width: 620px;
+                }
+            }
+        </style>
     </head>
     <body>
         <div class="shell">
@@ -13,79 +592,206 @@
                     <div class="eyebrow" id="deployment-state">
                         Shipping operations
                     </div>
-                    <h1>Document verification</h1>
+                    <h1>SEAL</h1>
                     <p class="subtitle">
-                        AI understands. Rules verify. Humans resolve exceptions.
+                        Shipping document verification. AI understands. Rules
+                        verify. Humans resolve exceptions.
                         <span id="ai-state"></span>
                     </p>
                 </div>
+                <div class="header-actions" aria-label="Primary actions">
+                    <button
+                        id="verify-documents"
+                        class="small-btn primary"
+                        type="button"
+                    >
+                        Verify documents
+                    </button>
+                    <button
+                        id="review-exceptions"
+                        class="small-btn"
+                        type="button"
+                    >
+                        Review exceptions
+                    </button>
+                </div>
             </header>
             <main id="dashboard-view">
+                <section id="spark-auth" class="card hidden">
+                    <p id="spark-status" class="notice">
+                        Connecting to Firebase…
+                    </p>
+                </section>
                 <div
-                    id="metrics"
-                    class="metrics"
-                    aria-label="Case summary filters"
-                ></div>
-                <section class="card">
+                    id="system-status"
+                    class="status-strip"
+                    aria-label="System status"
+                >
+                    <span id="dataset-status" class="status-item"
+                        >Dataset loading</span
+                    >
+                    <span id="firestore-status" class="status-item"
+                        >Local workspace</span
+                    >
+                    <span id="gemini-status" class="status-item"
+                        >Gemini unavailable</span
+                    >
+                </div>
+                <div id="new-email-form-slot"></div>
+                <section class="card" id="overview-card">
                     <div class="card-head">
-                        <h2>Cases</h2>
-                        <span id="case-count" class="muted"></span>
+                        <h2>Dataset and Verification Overview</h2>
+                        <span class="muted">Provided dataset</span>
                     </div>
                     <div
-                        id="quick-filters"
-                        class="quick-filters"
-                        aria-label="Quick filters"
+                        id="metrics"
+                        class="metrics performance-metrics"
+                        aria-label="Dataset and verification summary"
                     ></div>
-                    <div class="toolbar">
+                    <p id="performance-note" class="muted"></p>
+                </section>
+                <div class="summary-grid">
+                    <section class="card">
+                        <div class="card-head">
+                            <h2>Verification Overview</h2>
+                        </div>
+                        <div
+                            id="case-distribution"
+                            class="metrics performance-metrics"
+                        ></div>
+                        <p class="muted">
+                            Document checks grouped by verification outcome.
+                            Select a card to view its cases.
+                        </p>
+                    </section>
+                    <section class="card">
+                        <div class="card-head">
+                            <h2>Human Review Reasons</h2>
+                        </div>
+                        <div
+                            id="review-reasons"
+                            class="metrics performance-metrics"
+                        ></div>
+                        <p class="muted">
+                            Current unresolved reviews grouped by the reason
+                            manual action is required. Select a card to filter
+                            the table.
+                        </p>
+                    </section>
+                </div>
+                <section class="card">
+                    <div class="card-head"><h2>Other Email Workflows</h2></div>
+                    <div
+                        id="category-workflows"
+                        class="metrics performance-metrics"
+                    ></div>
+                    <p class="muted">
+                        SI requests, invoice questions, general messages, and
+                        spam remain actionable. Select a card to open that
+                        queue.
+                    </p>
+                </section>
+                <section class="card">
+                    <div class="card-head">
+                        <h2>Emails</h2>
+                        <span id="case-count" class="muted"></span>
+                    </div>
+                    <div class="toolbar" aria-label="Email filters">
                         <input
                             id="search"
-                            placeholder="Search case, sender, or subject"
-                            aria-label="Search cases"
-                        /><select
-                            id="category-filter"
-                            aria-label="Filter category"
+                            placeholder="Search email, sender, or subject"
+                            aria-label="Search emails"
+                        />
+                        <label class="filter-field"
+                            >Category
+                            <select id="category-filter">
+                                <option value="all">All categories</option>
+                                <option value="BL_COMPARISON">
+                                    Document comparison
+                                </option>
+                                <option value="SI_REQUEST">SI request</option>
+                                <option value="INVOICE_QUERY">
+                                    Invoice query
+                                </option>
+                                <option value="GENERAL">General</option>
+                                <option value="SPAM">Spam</option>
+                            </select>
+                        </label>
+                        <label class="filter-field"
+                            >Workflow status
+                            <select id="status-filter">
+                                <option value="all">All statuses</option>
+                            </select>
+                        </label>
+                        <label class="filter-field"
+                            >Date
+                            <select id="date-filter">
+                                <option value="all">All time</option>
+                                <option value="today">Today</option>
+                                <option value="7">Last 7 days</option>
+                                <option value="30">Last 30 days</option>
+                                <option value="custom">Custom range</option>
+                            </select>
+                        </label>
+                        <label id="date-from-field" class="filter-field hidden"
+                            >From
+                            <input id="date-from" type="date" />
+                        </label>
+                        <label id="date-to-field" class="filter-field hidden"
+                            >To
+                            <input id="date-to" type="date" />
+                        </label>
+                        <button
+                            id="clear-filters"
+                            class="small-btn"
+                            type="button"
                         >
-                            <option value="all">All categories</option>
-                            <option value="BL_COMPARISON">
-                                Document comparison
-                            </option>
-                            <option value="SI_REQUEST">SI request</option>
-                            <option value="INVOICE_QUERY">Invoice query</option>
-                            <option value="GENERAL">General</option>
-                            <option value="SPAM">Spam</option></select
-                        ><select
-                            id="status-filter"
-                            aria-label="Filter verification status"
-                        >
-                            <option value="all">All statuses</option>
-                            <option value="PROCESSING">Processing</option>
-                            <option value="OK">No mismatch detected</option>
-                            <option value="MISMATCH">Mismatch detected</option>
-                            <option value="NEEDS_REVIEW">
-                                Human review required
-                            </option>
-                            <option value="PROCESSING_FAILED">
-                                Processing failed
-                            </option>
-                            <option value="NOT_APPLICABLE">
-                                Not applicable
-                            </option>
-                        </select>
+                            Clear filters
+                        </button>
                     </div>
+                    <p class="muted">
+                        Attachments counts files listed on the source email.
+                        Zero means no files were attached; two usually means an
+                        SI and a draft BL.
+                    </p>
                     <div class="table-scroll">
                         <table class="master">
                             <thead>
                                 <tr>
-                                    <th>Email</th>
-                                    <th>Sender</th>
-                                    <th>Classification</th>
-                                    <th>Verification status</th>
-                                    <th>Documents</th>
+                                    <th>Subject and sender</th>
+                                    <th>Category</th>
+                                    <th>Workflow status</th>
+                                    <th>Attachments</th>
                                     <th>Updated</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody id="case-table"></tbody>
+                        </table>
+                    </div>
+                </section>
+                <section id="new-email-history" class="card hidden">
+                    <div class="card-head">
+                        <h2>New email history</h2>
+                        <span id="new-email-count" class="muted"></span>
+                    </div>
+                    <p class="muted">
+                        New emails and document batches submitted in this app
+                        appear here.
+                    </p>
+                    <div class="table-scroll">
+                        <table class="master">
+                            <thead>
+                                <tr>
+                                    <th>Subject and sender</th>
+                                    <th>Category</th>
+                                    <th>Workflow status</th>
+                                    <th>Attachments</th>
+                                    <th>Updated</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="new-email-table"></tbody>
                         </table>
                     </div>
                 </section>
@@ -95,6 +801,2300 @@
                 <div id="case-content" aria-live="polite"></div>
             </main>
         </div>
-        <script src="dashboard.js"></script>
+        <script>
+            const FIELDS = [
+                "shipper",
+                "consignee",
+                "notify_party",
+                "port_of_loading",
+                "port_of_discharge",
+                "container_count",
+                "gross_weight_kg",
+            ];
+            const LABEL = {
+                BL_COMPARISON: "Document comparison",
+                SI_REQUEST: "SI request",
+                INVOICE_QUERY: "Invoice query",
+                GENERAL: "General",
+                SPAM: "Spam",
+                OK: "No mismatch detected",
+                MISMATCH: "Mismatch detected",
+                NEEDS_REVIEW: "Human review required",
+                PROCESSING_FAILED: "Processing failed",
+                PROCESSING: "Processing",
+                NOT_APPLICABLE: "Awaiting comparison documents",
+            };
+            const CATEGORY_WORKFLOW = {
+                SI_REQUEST: {
+                    title: "Shipping instruction request",
+                    defaultState: "needs_response",
+                    states: {
+                        needs_response: [
+                            "Response required",
+                            "Review the request and determine which shipping information or documents are needed.",
+                        ],
+                        waiting_for_information: [
+                            "Waiting for shipment information",
+                            "The sender or shipment owner must provide missing details before work can continue.",
+                        ],
+                        ready_to_prepare: [
+                            "Ready to prepare SI",
+                            "The required details are available and the shipping instruction can be prepared.",
+                        ],
+                        response_sent: [
+                            "Response sent",
+                            "A response or shipping instruction was sent; monitor for any reply.",
+                        ],
+                        completed: [
+                            "SI request completed",
+                            "The request is complete and requires no further action.",
+                        ],
+                    },
+                },
+                INVOICE_QUERY: {
+                    title: "Invoice query",
+                    defaultState: "needs_review",
+                    states: {
+                        needs_review: [
+                            "Finance review required",
+                            "Review the invoice or payment question and identify the finance owner.",
+                        ],
+                        routed_to_finance: [
+                            "Routed to finance",
+                            "The query has been assigned to finance for investigation.",
+                        ],
+                        waiting_for_finance: [
+                            "Waiting for finance response",
+                            "Finance is reviewing the query; follow up if the response is overdue.",
+                        ],
+                        response_sent: [
+                            "Response sent",
+                            "The finance response was sent to the requester; monitor for follow-up.",
+                        ],
+                        completed: [
+                            "Invoice query completed",
+                            "The invoice or payment query is resolved.",
+                        ],
+                    },
+                },
+                GENERAL: {
+                    title: "General email",
+                    defaultState: "needs_review",
+                    states: {
+                        needs_review: [
+                            "Message review required",
+                            "Read the message and decide whether to respond, forward, or archive it.",
+                        ],
+                        forwarded_to_owner: [
+                            "Forwarded to owner",
+                            "The message has been assigned to the appropriate owner.",
+                        ],
+                        waiting_for_response: [
+                            "Waiting for response",
+                            "An owner or external party must respond before this task can continue.",
+                        ],
+                        response_sent: [
+                            "Response sent",
+                            "A response was sent; monitor for any follow-up.",
+                        ],
+                        completed: [
+                            "General email completed",
+                            "The message has been handled and requires no further action.",
+                        ],
+                    },
+                },
+                SPAM: {
+                    title: "Spam review",
+                    defaultState: "needs_review",
+                    states: {
+                        needs_review: [
+                            "Spam review required",
+                            "Review the sender and content before taking action.",
+                        ],
+                        confirmed_spam: [
+                            "Confirmed as spam",
+                            "The classification was confirmed and the message is ready to archive.",
+                        ],
+                        restored_to_inbox: [
+                            "Restored to inbox",
+                            "A reviewer challenged the spam classification and returned the message for normal handling.",
+                        ],
+                        archived: [
+                            "Spam archived",
+                            "The spam message was archived or removed from the active queue.",
+                        ],
+                        completed: [
+                            "Spam review completed",
+                            "The spam review is complete and requires no further action.",
+                        ],
+                    },
+                },
+            };
+            const $ = (id) => document.getElementById(id);
+            const node = (tag, text = "", className = "") => {
+                const x = document.createElement(tag);
+                x.textContent = text ?? "";
+                x.className = className;
+                return x;
+            };
+            const add = (parent, ...children) => {
+                parent.append(...children);
+                return parent;
+            };
+            const apiPath = (kind, id, index) =>
+                "/api/" +
+                kind +
+                "/" +
+                encodeURIComponent(id) +
+                (index === undefined ? "" : "/" + index);
+            const button = (label, handler, className = "") => {
+                const b = node("button", label, className);
+                b.type = "button";
+                b.onclick = handler;
+                return b;
+            };
+            let state = {
+                cases: {},
+                decisions: {},
+                metrics: {},
+                features: {},
+                page: "dashboard",
+                selected: null,
+                email: null,
+                mismatch: 0,
+                reasonFilter: null,
+                summaryFilter: null,
+            };
+            async function request(url, body) {
+                if (window.SPARK_MODE) return window.sparkRequest(url, body);
+                const response = await fetch(
+                    url,
+                    body === undefined
+                        ? {}
+                        : {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(body),
+                          },
+                );
+                const result = await response.json();
+                if (!response.ok)
+                    throw new Error(result.error || "Request failed");
+                return result;
+            }
+            function prettyField(field) {
+                return (
+                    field
+                        ?.replaceAll("_", " ")
+                        .replace(/\b\w/g, (c) => c.toUpperCase()) || "—"
+                );
+            }
+            function inferredCategoryWorkflowState(c) {
+                const email = c.email || {};
+                const subject = String(email.subject || "").toLowerCase();
+                const body = String(email.body || "").toLowerCase();
+                const text = `${subject}\n${body}`;
+                if (c.category === "SI_REQUEST") {
+                    if (/\b(request si|si needed)\b/.test(subject))
+                        return "needs_response";
+                    const fieldSignals = [
+                        "shipper",
+                        "consignee",
+                        "notify",
+                        "pol:",
+                        "pod:",
+                        "container",
+                        "gross weight",
+                    ].filter((signal) => body.includes(signal)).length;
+                    if (
+                        fieldSignals >= 5 &&
+                        !/\b(missing|awaiting|pending details|please provide)\b/.test(
+                            body,
+                        )
+                    )
+                        return "ready_to_prepare";
+                    if (
+                        /\b(missing|awaiting|pending details|please provide|information needed)\b/.test(
+                            text,
+                        )
+                    )
+                        return "waiting_for_information";
+                    return "needs_response";
+                }
+                if (c.category === "INVOICE_QUERY") {
+                    if (
+                        /\b(still missing|awaiting|pending|not received|follow[ -]?up)\b/.test(
+                            text,
+                        )
+                    )
+                        return "waiting_for_finance";
+                    return "needs_review";
+                }
+                if (c.category === "GENERAL") {
+                    if (
+                        /\b(completed successfully|wishing everyone|office resumes|for your information|fyi)\b/.test(
+                            text,
+                        )
+                    )
+                        return "completed";
+                    if (
+                        /\b(outstanding|pending items?|reminder|documents? to follow|awaiting)\b/.test(
+                            text,
+                        )
+                    )
+                        return "waiting_for_response";
+                    return "needs_review";
+                }
+                if (c.category === "SPAM") {
+                    if (
+                        /https?:\/\/|\b(won|winner|gift card|guaranteed|verify your account|unpaid customs fee)\b/.test(
+                            text,
+                        )
+                    )
+                        return "confirmed_spam";
+                    return "needs_review";
+                }
+                return CATEGORY_WORKFLOW[c.category]?.defaultState || null;
+            }
+            function categoryWorkflowState(c) {
+                const config = CATEGORY_WORKFLOW[c.category],
+                    decision = state.decisions[c.email_id];
+                if (!config) return null;
+                if (decision?.action === "complete_category")
+                    return "completed";
+                if (
+                    decision?.action === "update_category_workflow" &&
+                    config.states[decision.corrections?.workflow_state]
+                )
+                    return decision.corrections.workflow_state;
+                return inferredCategoryWorkflowState(c);
+            }
+            function categoryWorkflowInfo(c) {
+                const config = CATEGORY_WORKFLOW[c.category],
+                    workflowState = categoryWorkflowState(c);
+                return {
+                    config,
+                    workflowState,
+                    label:
+                        config?.states[workflowState]?.[0] ||
+                        "Email action required",
+                    guidance:
+                        config?.states[workflowState]?.[1] ||
+                        "Review this email.",
+                };
+            }
+            function resultLabel(c) {
+                return c.category !== "BL_COMPARISON"
+                    ? categoryWorkflowInfo(c).label
+                    : c.status === "NEEDS_REVIEW" &&
+                        state.decisions[c.email_id]?.action === "resolve"
+                      ? "Human review completed"
+                      : LABEL[c.status] || "Processing";
+            }
+            function resultKey(c) {
+                if (c.category !== "BL_COMPARISON")
+                    return categoryWorkflowState(c) === "completed"
+                        ? "CATEGORY_COMPLETED"
+                        : "CATEGORY_PENDING";
+                return c.category === "BL_COMPARISON" &&
+                    c.status === "NEEDS_REVIEW" &&
+                    state.decisions[c.email_id]?.action === "resolve"
+                    ? "RESOLVED_REVIEW"
+                    : c.category === "BL_COMPARISON"
+                      ? c.status
+                      : "NOT_APPLICABLE";
+            }
+            function shortDate(value) {
+                if (!value) return "—";
+                const d = new Date(value);
+                return Number.isNaN(d.getTime())
+                    ? "—"
+                    : d.toLocaleString(undefined, {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                      });
+            }
+            function latestUpdate(c, decision) {
+                const caseTime = Date.parse(c.updated_at || "") || 0,
+                    decisionTime = Date.parse(decision?.updated_at || "") || 0;
+                return decisionTime > caseTime
+                    ? decision.updated_at
+                    : c.updated_at || decision?.updated_at;
+            }
+            function unresolved(id, c) {
+                return (
+                    c.status === "NEEDS_REVIEW" &&
+                    state.decisions[id]?.action !== "resolve"
+                );
+            }
+            function issue(c) {
+                const code = c.internal_reason || "";
+                if (c.status === "PROCESSING_FAILED")
+                    return {
+                        name: "Document processing failed",
+                        field: "—",
+                        reason:
+                            (c.processing_step || "Processing") +
+                            " failed" +
+                            (c.failed_attachment
+                                ? " for " + c.failed_attachment.split("/").pop()
+                                : "") +
+                            ": " +
+                            (c.error || "Unknown technical error"),
+                    };
+                if (code === "MISSING_SI_AND_BL")
+                    return {
+                        name: "Missing documents",
+                        field: "SI and draft BL",
+                        reason: "No attachments were supplied.",
+                    };
+                if (code === "MISSING_SI_OR_BL")
+                    return {
+                        name: "Missing document",
+                        field: c.documents?.si
+                            ? "Draft BL"
+                            : c.documents?.bl
+                              ? "SI"
+                              : "SI / draft BL",
+                        reason: "A required document was not found.",
+                    };
+                if (code === "AMBIGUOUS_DOCUMENT_ROLE")
+                    return {
+                        name: "Document identification",
+                        field: "SI / draft BL",
+                        reason: "Unable to confidently identify the SI and draft BL.",
+                    };
+                if (code === "POSSIBLE_WRONG_DOCUMENT_PAIR")
+                    return {
+                        name: "Document pairing",
+                        field: "—",
+                        reason: "Shipment identifiers conflict. Check that these documents belong together.",
+                    };
+                if (code === "DOCUMENT_INTERNAL_INCONSISTENCY")
+                    return {
+                        name: "Document values",
+                        field: "Container count / gross weight",
+                        reason: "Document values require verification.",
+                    };
+                if (code === "LOW_EXTRACTION_CONFIDENCE")
+                    return {
+                        name: "Uncertain extraction",
+                        field:
+                            (c.uncertain_fields || [])
+                                .map(prettyField)
+                                .join(", ") || "—",
+                        reason: "One or more extracted values need confirmation.",
+                    };
+                if (code === "MISSING_REQUIRED_FIELD")
+                    return {
+                        name: "Missing value",
+                        field:
+                            (c.missing_fields || [])
+                                .map(prettyField)
+                                .join(", ") || "—",
+                        reason: "A required shipment value could not be read.",
+                    };
+                if (code === "UNREADABLE_DOCUMENT")
+                    return {
+                        name: "Unreadable document",
+                        field: "—",
+                        reason:
+                            (c.failed_attachment
+                                ? c.failed_attachment.split("/").pop() + ": "
+                                : "") +
+                            (c.error ||
+                                "The attachment could not be read reliably."),
+                    };
+                return {
+                    name: "Verification needs review",
+                    field: "—",
+                    reason: "Inspect the documents and confirm the values.",
+                };
+            }
+            function nextAction(c) {
+                const code = c.internal_reason || "";
+                if (c.status === "PROCESSING_FAILED")
+                    return "Retry processing.";
+                if (code === "MISSING_SI_AND_BL" || code === "MISSING_SI_OR_BL")
+                    return "Obtain the missing document, then retry when it is available.";
+                if (
+                    code === "AMBIGUOUS_DOCUMENT_ROLE" ||
+                    code === "POSSIBLE_WRONG_DOCUMENT_PAIR"
+                )
+                    return "Open the attachments and select the correct SI and draft BL.";
+                if (code === "DOCUMENT_INTERNAL_INCONSISTENCY")
+                    return "Check container rows and totals against the source document.";
+                if (code === "UNREADABLE_DOCUMENT")
+                    return state.features.ai_enabled
+                        ? "Inspect the attachment and retry with OCR / Vision."
+                        : "Request a readable copy or review the attachment manually; retry after the source is updated.";
+                return "Review the source evidence, then confirm or correct the value.";
+            }
+            function metric(title, value) {
+                return add(
+                    node("div", "", "metric"),
+                    node("strong", String(value)),
+                    node("span", title),
+                );
+            }
+            function filterMetric(title, value, key, filters) {
+                const card = metric(title, value);
+                card.classList.add("interactive");
+                card.classList.toggle("active", state.summaryFilter === key);
+                card.tabIndex = 0;
+                card.setAttribute("role", "button");
+                card.setAttribute(
+                    "aria-label",
+                    `${title}: ${value}. Filter emails.`,
+                );
+                const activate = () => applySummaryFilter(key, filters);
+                card.onclick = activate;
+                card.onkeydown = (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        activate();
+                    }
+                };
+                return card;
+            }
+            function populateStatusFilter(preferred = "all") {
+                const select = $("status-filter"),
+                    category = $("category-filter").value;
+                const sourceCases = Object.entries(state.cases).filter(
+                    ([id, c]) =>
+                        !(
+                            state.features.cloud_mode &&
+                            state.features.new_case_ids?.includes(id)
+                        ) &&
+                        (category === "all" || c.category === category),
+                );
+                const appendAvailableOptions = (group, options) => {
+                    for (const [value, label] of options) {
+                        const count = sourceCases.filter(([id, c]) =>
+                            statusMatches(id, c, value),
+                        ).length;
+                        if (!count) continue;
+                        const optionNode = node(
+                            "option",
+                            `${label} (${count})`,
+                        );
+                        optionNode.value = value;
+                        group.append(optionNode);
+                    }
+                    if (group.children.length) select.append(group);
+                };
+                select.replaceChildren();
+                const all = node(
+                    "option",
+                    `All statuses (${sourceCases.length})`,
+                );
+                all.value = "all";
+                select.append(all);
+                if (category === "all") {
+                    const group = node("optgroup");
+                    group.label = "Overview";
+                    appendAvailableOptions(group, [
+                        ["CATEGORY_PENDING", "Open category work"],
+                        ["CATEGORY_COMPLETED", "Completed category work"],
+                        ["OK", "No mismatch detected"],
+                        ["MISMATCH", "Mismatch detected"],
+                        ["NEEDS_REVIEW", "Human review required"],
+                    ]);
+                } else if (category === "BL_COMPARISON") {
+                    const group = node("optgroup");
+                    group.label = "Document comparison";
+                    appendAvailableOptions(group, [
+                        ["PROCESSING", "Processing"],
+                        ["OK", "No mismatch detected"],
+                        ["MISMATCH", "Mismatch detected"],
+                        ["NEEDS_REVIEW", "Human review required"],
+                        ["RESOLVED_REVIEW", "Human review completed"],
+                        ["PROCESSING_FAILED", "Processing failed"],
+                        ["NOT_APPLICABLE", "Awaiting comparison documents"],
+                    ]);
+                }
+                for (const [workflowCategory, config] of Object.entries(
+                    CATEGORY_WORKFLOW,
+                )) {
+                    if (category !== workflowCategory) continue;
+                    const group = node("optgroup");
+                    group.label = config.title;
+                    appendAvailableOptions(
+                        group,
+                        Object.entries(config.states).map(
+                            ([workflowState, details]) => [
+                                `WORKFLOW:${workflowCategory}:${workflowState}`,
+                                details[0],
+                            ],
+                        ),
+                    );
+                }
+                select.value = Array.from(select.options).some(
+                    (optionNode) => optionNode.value === preferred,
+                )
+                    ? preferred
+                    : "all";
+            }
+            function statusMatches(id, c, status) {
+                if (status === "all") return true;
+                const workflowParts = status.startsWith("WORKFLOW:")
+                    ? status.split(":")
+                    : null;
+                if (workflowParts)
+                    return (
+                        c.category === workflowParts[1] &&
+                        categoryWorkflowState(c) === workflowParts[2]
+                    );
+                if (status === "NEEDS_REVIEW") return unresolved(id, c);
+                return status === resultKey(c);
+            }
+            function applySummaryFilter(
+                key,
+                { category = "all", status = "all", reason = null } = {},
+            ) {
+                state.summaryFilter = key;
+                state.reasonFilter = reason;
+                $("search").value = "";
+                $("category-filter").value = category;
+                populateStatusFilter(status);
+                $("date-filter").value = "all";
+                $("date-from-field").classList.add("hidden");
+                $("date-to-field").classList.add("hidden");
+                renderDashboard();
+                $("case-table")
+                    .closest("section")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+            function percentage(value) {
+                return Number.isFinite(value)
+                    ? (value * 100).toFixed(value === 1 ? 0 : 1) + "%"
+                    : "Unavailable";
+            }
+            function caseTimestamp(c) {
+                const email = c.email || {};
+                for (const value of [
+                    email.date,
+                    email.timestamp,
+                    email.sent_at,
+                    email.received_at,
+                    c.updated_at,
+                ]) {
+                    const time = Date.parse(value);
+                    if (Number.isFinite(time)) return time;
+                }
+                return null;
+            }
+            function dateMatches(c) {
+                const selection = $("date-filter").value;
+                if (selection === "all") return true;
+                const time = caseTimestamp(c);
+                if (time == null) return false;
+                const now = new Date(),
+                    start = new Date(now),
+                    end = new Date(now);
+                start.setHours(0, 0, 0, 0);
+                end.setHours(23, 59, 59, 999);
+                if (selection === "7" || selection === "30")
+                    start.setDate(start.getDate() - Number(selection) + 1);
+                if (selection === "custom") {
+                    const from = $("date-from").value,
+                        to = $("date-to").value;
+                    if (from)
+                        start.setTime(new Date(from + "T00:00:00").getTime());
+                    else start.setTime(-8640000000000000);
+                    if (to)
+                        end.setTime(new Date(to + "T23:59:59.999").getTime());
+                    else end.setTime(8640000000000000);
+                }
+                return time >= start.getTime() && time <= end.getTime();
+            }
+            function renderCaseSummaries() {
+                const newIds = new Set(state.features.new_case_ids || []);
+                const cases = Object.entries(state.cases).filter(
+                    ([id]) => !newIds.has(id),
+                );
+                const distribution = {
+                    "Verified - No mismatch": cases.filter(
+                        ([, c]) =>
+                            c.category === "BL_COMPARISON" && c.status === "OK",
+                    ).length,
+                    "Mismatch detected": cases.filter(
+                        ([, c]) => c.status === "MISMATCH",
+                    ).length,
+                    "Human review required": cases.filter(([id, c]) =>
+                        unresolved(id, c),
+                    ).length,
+                };
+                const overviewFilters = {
+                    "Verified - No mismatch": {
+                        category: "BL_COMPARISON",
+                        status: "OK",
+                    },
+                    "Mismatch detected": { status: "MISMATCH" },
+                    "Human review required": { status: "NEEDS_REVIEW" },
+                };
+                $("case-distribution").replaceChildren(
+                    ...Object.entries(distribution).map(([name, count]) =>
+                        filterMetric(
+                            name,
+                            count,
+                            `overview:${name}`,
+                            overviewFilters[name],
+                        ),
+                    ),
+                );
+                const labels = {
+                    wrong_doc_type: "Wrong document",
+                    missing_attachment: "Missing attachment",
+                    unreadable: "Unreadable document",
+                    missing_value: "Missing value",
+                };
+                const reasons = {};
+                for (const [id, c] of cases)
+                    if (unresolved(id, c)) {
+                        const code = labels[c.review_reason]
+                            ? c.review_reason
+                            : "other";
+                        if (!reasons[code])
+                            reasons[code] = {
+                                label: labels[code] || "Other",
+                                count: 0,
+                            };
+                        reasons[code].count += 1;
+                    }
+                $("review-reasons").replaceChildren(
+                    ...Object.entries(reasons).map(([code, item]) =>
+                        filterMetric(item.label, item.count, `reason:${code}`, {
+                            status: "NEEDS_REVIEW",
+                            reason: code,
+                        }),
+                    ),
+                );
+                if (!Object.keys(reasons).length)
+                    $("review-reasons").append(metric("No active reviews", 0));
+                const workflowCards = Object.entries(CATEGORY_WORKFLOW).map(
+                    ([category, config]) => {
+                        const categoryCases = cases.filter(
+                            ([, c]) => c.category === category,
+                        );
+                        const pending = categoryCases.filter(
+                            ([, c]) => categoryWorkflowState(c) !== "completed",
+                        ).length;
+                        return filterMetric(
+                            `${config.title} · ${pending} pending`,
+                            categoryCases.length,
+                            `category:${category}`,
+                            { category },
+                        );
+                    },
+                );
+                $("category-workflows").replaceChildren(...workflowCards);
+            }
+            function visibleCases() {
+                const search = $("search").value.toLowerCase(),
+                    category = $("category-filter").value,
+                    status = $("status-filter").value;
+                return Object.entries(state.cases).filter(([id, c]) => {
+                    if (
+                        state.features.cloud_mode &&
+                        state.features.new_case_ids?.includes(id)
+                    )
+                        return false;
+                    const e = c.email || {};
+                    const statusMatch = statusMatches(id, c, status);
+                    const reasonCode = [
+                        "wrong_doc_type",
+                        "missing_attachment",
+                        "unreadable",
+                        "missing_value",
+                    ].includes(c.review_reason)
+                        ? c.review_reason
+                        : "other";
+                    return (
+                        statusMatch &&
+                        (!state.reasonFilter ||
+                            state.reasonFilter === reasonCode) &&
+                        dateMatches(c) &&
+                        (category === "all" || category === c.category) &&
+                        [id, e.from, e.subject].some((v) =>
+                            String(v || "")
+                                .toLowerCase()
+                                .includes(search),
+                        )
+                    );
+                });
+            }
+            function renderDashboard() {
+                const m = state.metrics;
+                const isCloud = Boolean(state.features.cloud_mode);
+                const newIds = state.features.new_case_ids || [];
+                $("dataset-status").textContent = isCloud
+                    ? `${state.features.original_email_count || m.total || 0} private emails loaded`
+                    : window.SPARK_MODE
+                      ? "Private dataset locked"
+                      : `${m.total || 0} local emails loaded`;
+                $("firestore-status").textContent = isCloud
+                    ? "Firestore connected"
+                    : window.SPARK_MODE
+                      ? "Firestore sign-in required"
+                      : "Local workspace";
+                $("gemini-status").textContent = state.features.ai_enabled
+                    ? "Gemini assistance available"
+                    : "Gemini assistance unavailable";
+                $("new-email-history").classList.toggle("hidden", !isCloud);
+                if (isCloud) {
+                    $("new-email-count").textContent =
+                        newIds.length +
+                        (newIds.length === 1 ? " submission" : " submissions");
+                    const historyRows = newIds
+                        .filter(
+                            (id) =>
+                                state.cases[id] && dateMatches(state.cases[id]),
+                        )
+                        .sort(
+                            (a, b) =>
+                                (Date.parse(
+                                    latestUpdate(
+                                        state.cases[b],
+                                        state.decisions[b],
+                                    ),
+                                ) || 0) -
+                                (Date.parse(
+                                    latestUpdate(
+                                        state.cases[a],
+                                        state.decisions[a],
+                                    ),
+                                ) || 0),
+                        )
+                        .map((id) => {
+                            const c = state.cases[id];
+                            const row = node("tr", "", "clickable");
+                            row.tabIndex = 0;
+                            row.onclick = () => openCase(id);
+                            row.onkeydown = (event) => {
+                                if (event.key === "Enter") openCase(id);
+                            };
+                            row.append(
+                                add(
+                                    node("td"),
+                                    node(
+                                        "span",
+                                        c.email?.subject || "No subject",
+                                        "subject",
+                                    ),
+                                    node(
+                                        "div",
+                                        `${c.email?.from || "Unknown sender"} · ${id}`,
+                                        "secondary-text",
+                                    ),
+                                ),
+                                add(
+                                    node("td"),
+                                    node(
+                                        "span",
+                                        LABEL[c.category] || c.category,
+                                        "badge " + c.category,
+                                    ),
+                                ),
+                                add(
+                                    node("td"),
+                                    node(
+                                        "span",
+                                        resultLabel(c),
+                                        "badge " + resultKey(c),
+                                    ),
+                                ),
+                                node(
+                                    "td",
+                                    String(c.email?.attachments?.length || 0),
+                                ),
+                                node(
+                                    "td",
+                                    shortDate(
+                                        latestUpdate(c, state.decisions[id]),
+                                    ),
+                                ),
+                                add(
+                                    node("td"),
+                                    button(
+                                        "View",
+                                        () => openCase(id),
+                                        "small-btn",
+                                    ),
+                                ),
+                            );
+                            return row;
+                        });
+                    if (!historyRows.length) {
+                        const cell = node(
+                            "td",
+                            "No new emails submitted yet.",
+                            "muted",
+                        );
+                        cell.colSpan = 6;
+                        historyRows.push(add(node("tr"), cell));
+                    }
+                    $("new-email-table").replaceChildren(...historyRows);
+                }
+                const verified = state.features.verified_performance;
+                const overviewMetrics = [
+                    filterMetric(
+                        "Total Emails",
+                        m.total || 0,
+                        "summary:total",
+                        {},
+                    ),
+                    filterMetric(
+                        "Document Checks",
+                        m.comparison_requests || 0,
+                        "summary:checks",
+                        { category: "BL_COMPARISON" },
+                    ),
+                    filterMetric(
+                        "Mismatches Detected",
+                        m.mismatches || 0,
+                        "summary:mismatch",
+                        { status: "MISMATCH" },
+                    ),
+                    filterMetric(
+                        "Human Review Required",
+                        m.human_review || 0,
+                        "summary:review",
+                        { status: "NEEDS_REVIEW" },
+                    ),
+                ];
+                if (verified)
+                    overviewMetrics.push(
+                        metric(
+                            "Review Detection",
+                            `${verified.expected_reviews - verified.missed_reviews} / ${verified.expected_reviews}`,
+                        ),
+                        metric(
+                            "Field Coverage",
+                            percentage(m.field_extraction_coverage),
+                        ),
+                    );
+                else
+                    overviewMetrics.push(
+                        metric(
+                            "Field Coverage",
+                            percentage(m.field_extraction_coverage),
+                        ),
+                    );
+                $("metrics").replaceChildren(...overviewMetrics);
+                $("performance-note").textContent = verified
+                    ? `${verified.dataset}; verified ${verified.verified_at}. ${verified.missed_reviews} expected reviews missed. Classification accuracy and mismatch precision/recall were ${percentage(verified.classification_accuracy)} on this validation set. These results are dataset-specific evidence, not guaranteed performance on unseen production data. Coverage measures whether required values were found, not whether every extracted value is accurate.`
+                    : "Ground-truth validation results are unavailable. Coverage is calculated from the currently loaded cases and does not imply extraction accuracy.";
+                renderCaseSummaries();
+                const entries = visibleCases();
+                $("case-count").textContent =
+                    entries.length + " of " + (m.total || 0) + " emails";
+                $("case-table").replaceChildren(
+                    ...entries.map(([id, c]) => {
+                        const e = c.email || {},
+                            row = node("tr", "", "clickable");
+                        row.tabIndex = 0;
+                        row.onclick = () => openCase(id);
+                        row.onkeydown = (event) => {
+                            if (event.key === "Enter") openCase(id);
+                        };
+                        const status = add(
+                            node("td"),
+                            node(
+                                "span",
+                                resultLabel(c),
+                                "badge " + resultKey(c),
+                            ),
+                        );
+                        if (
+                            state.decisions[id]?.action === "resolve" &&
+                            c.status === "NEEDS_REVIEW"
+                        )
+                            status.append(
+                                node(
+                                    "div",
+                                    "Resolved by reviewer",
+                                    "secondary-text",
+                                ),
+                            );
+                        const action =
+                            c.category !== "BL_COMPARISON"
+                                ? resultKey(c) === "CATEGORY_COMPLETED"
+                                    ? "View"
+                                    : "Handle"
+                                : c.status === "PROCESSING_FAILED"
+                                  ? "Retry"
+                                  : unresolved(id, c)
+                                    ? "Review"
+                                    : "View";
+                        const actionButton = button(
+                            action,
+                            (event) => {
+                                event.stopPropagation();
+                                action === "Retry" ? retry(id) : openCase(id);
+                            },
+                            "small-btn primary",
+                        );
+                        row.append(
+                            add(
+                                node("td"),
+                                node(
+                                    "span",
+                                    e.subject || "No subject",
+                                    "subject",
+                                ),
+                                node(
+                                    "div",
+                                    `${e.from || "Unknown sender"} · ${id}`,
+                                    "secondary-text",
+                                ),
+                            ),
+                            add(
+                                node("td"),
+                                node(
+                                    "span",
+                                    LABEL[c.category] || c.category,
+                                    "badge " + c.category,
+                                ),
+                            ),
+                            status,
+                            node("td", String(e.attachments?.length || 0)),
+                            node(
+                                "td",
+                                shortDate(latestUpdate(c, state.decisions[id])),
+                            ),
+                            add(node("td"), actionButton),
+                        );
+                        return row;
+                    }),
+                );
+                if (!entries.length) {
+                    const cell = node(
+                        "td",
+                        "No cases match these filters.",
+                        "muted",
+                    );
+                    cell.colSpan = 6;
+                    $("case-table").append(add(node("tr"), cell));
+                }
+            }
+            function route() {
+                const hash = decodeURIComponent(location.hash.slice(1));
+                if (hash.startsWith("case/") && state.cases[hash.slice(5)]) {
+                    state.page = "case";
+                    state.selected = hash.slice(5);
+                } else {
+                    state.page = "dashboard";
+                    state.selected = null;
+                }
+                render();
+                if (state.page === "case") fetchEmail(state.selected);
+            }
+            function render() {
+                $("dashboard-view").classList.toggle(
+                    "hidden",
+                    state.page !== "dashboard",
+                );
+                $("case-view").classList.toggle(
+                    "hidden",
+                    state.page !== "case",
+                );
+                if (state.page === "dashboard") renderDashboard();
+                else renderCase();
+            }
+            async function load() {
+                try {
+                    const data = await request("/api/cases");
+                    Object.assign(state, data);
+                    populateStatusFilter($("status-filter").value);
+                    $("deployment-state").textContent =
+                        "Shipping operations · " +
+                        (window.SPARK_MODE
+                            ? "Cloud application"
+                            : "Local prototype");
+                    $("ai-state").textContent = state.features.ai_enabled
+                        ? "AI assistance available."
+                        : window.SPARK_MODE
+                          ? "Sign in to enable AI assistance."
+                          : "AI assistance unavailable in this demo.";
+                    route();
+                } catch (error) {
+                    $("dashboard-view").replaceChildren(
+                        node("p", error.message, "notice error"),
+                    );
+                }
+            }
+            function showDashboard() {
+                if (location.hash !== "#dashboard") location.hash = "dashboard";
+                else route();
+                window.scrollTo(0, 0);
+            }
+            function openCase(id) {
+                state.mismatch = 0;
+                state.email = null;
+                if (location.hash !== "#case/" + encodeURIComponent(id))
+                    location.hash = "case/" + encodeURIComponent(id);
+                else route();
+                window.scrollTo(0, 0);
+            }
+            async function fetchEmail(id) {
+                try {
+                    state.email = await request(apiPath("email", id));
+                    if (state.page === "case" && state.selected === id)
+                        renderCase();
+                } catch (error) {
+                    $("case-content").prepend(
+                        node("p", error.message, "notice error"),
+                    );
+                }
+            }
+            function metadata(label, value) {
+                return [node("dt", label), node("dd", value || "—")];
+            }
+            function summaryMeta(label, value) {
+                return add(
+                    node("div"),
+                    node("dt", label),
+                    node("dd", value || "—"),
+                );
+            }
+            function section(title) {
+                return add(node("section", "", "card"), node("h3", title));
+            }
+            function renderCase() {
+                const id = state.selected,
+                    c = state.cases[id];
+                if (!c) return;
+                const e =
+                        state.email?.email_id === id
+                            ? state.email
+                            : c.email || {},
+                    area = $("case-content");
+                area.replaceChildren();
+                const head = section("Case result"),
+                    box = node("div", "", "case-summary " + c.status),
+                    count = c.mismatches?.length || 0;
+                const headline =
+                    state.decisions[id]?.action === "resolve" &&
+                    c.status === "NEEDS_REVIEW"
+                        ? "Human review completed"
+                        : c.status === "MISMATCH"
+                          ? count +
+                            " mismatch" +
+                            (count === 1 ? "" : "es") +
+                            " detected"
+                          : c.status === "NEEDS_REVIEW" &&
+                              c.uncertain_fields?.length
+                            ? "Human review required for " +
+                              c.uncertain_fields.length +
+                              " field" +
+                              (c.uncertain_fields.length === 1 ? "" : "s")
+                            : resultLabel(c);
+                box.append(
+                    node(
+                        "div",
+                        id + " · " + (LABEL[c.category] || c.category),
+                        "eyebrow",
+                    ),
+                    node("h2", headline),
+                    node("p", e.subject || "No subject"),
+                );
+                if (c.status === "MISMATCH")
+                    box.append(
+                        node(
+                            "p",
+                            "Check " +
+                                (c.mismatches || [])
+                                    .map((m) => prettyField(m.field))
+                                    .join(", ") +
+                                ". Confirm the discrepancy or correct a value.",
+                        ),
+                    );
+                if (
+                    c.status === "NEEDS_REVIEW" ||
+                    c.status === "PROCESSING_FAILED"
+                ) {
+                    box.append(node("p", issue(c).reason));
+                    if (
+                        state.decisions[id]?.action === "resolve" &&
+                        c.status === "NEEDS_REVIEW"
+                    )
+                        box.append(
+                            node(
+                                "p",
+                                "An operator marked this review complete. Automated verification remains inconclusive.",
+                            ),
+                        );
+                    else box.append(node("p", "Next action: " + nextAction(c)));
+                }
+                if (c.status === "PROCESSING")
+                    box.append(
+                        node(
+                            "p",
+                            c.processing_step ||
+                                "Document verification is in progress.",
+                        ),
+                    );
+                if (c.category !== "BL_COMPARISON")
+                    box.append(
+                        node(
+                            "p",
+                            "Next action: " + categoryWorkflowInfo(c).guidance,
+                        ),
+                    );
+                else if (c.status === "NOT_APPLICABLE")
+                    box.append(
+                        node(
+                            "p",
+                            "This thread is waiting for comparison documents. It will not enter human review until an SI and draft BL are expected.",
+                        ),
+                    );
+                const summary = add(
+                    node("dl"),
+                    summaryMeta("Sender", e.from),
+                    summaryMeta(
+                        "Classification",
+                        LABEL[c.category] || c.category,
+                    ),
+                    summaryMeta(
+                        "Updated",
+                        shortDate(latestUpdate(c, state.decisions[id])),
+                    ),
+                );
+                if (c.category === "BL_COMPARISON")
+                    summary.append(
+                        summaryMeta(
+                            "Shipping Instruction",
+                            c.documents?.si?.split("/").pop() || "Unidentified",
+                        ),
+                        summaryMeta(
+                            "Draft BL",
+                            c.documents?.bl?.split("/").pop() || "Unidentified",
+                        ),
+                    );
+                else summary.append(summaryMeta("Workflow", resultLabel(c)));
+                box.append(summary);
+                head.append(box);
+                area.append(head);
+                renderCaseManagement(c, area);
+                if (c.category !== "BL_COMPARISON")
+                    renderCategoryWorkflow(c, area);
+                renderProcessingMethod(c, area);
+                if (
+                    c.category === "BL_COMPARISON" &&
+                    window.SPARK_MODE &&
+                    state.features.ai_enabled
+                )
+                    area.append(
+                        add(
+                            section("Reanalyze documents"),
+                            node(
+                                "p",
+                                "Select this email's SI and draft BL files to update its verification result with Gemini.",
+                                "muted",
+                            ),
+                            button("Reanalyze with Gemini", () =>
+                                retry(id, true),
+                            ),
+                        ),
+                    );
+                if (
+                    c.category === "BL_COMPARISON" &&
+                    c.status !== "NOT_APPLICABLE"
+                )
+                    renderReview(c, area);
+                if (
+                    c.category === "BL_COMPARISON" &&
+                    c.status !== "PROCESSING" &&
+                    (c.si_fields || c.bl_fields)
+                )
+                    renderComparison(c, area);
+                renderSource(c, e, area);
+            }
+            function caseReport(c) {
+                const e = c.email || {},
+                    decisionRecord = state.decisions[c.email_id] || {};
+                const lines = [
+                    "SEAL Verification Report",
+                    `Case: ${c.email_id}`,
+                    `Subject: ${e.subject || ""}`,
+                    `Category: ${LABEL[c.category] || c.category}`,
+                    `Result: ${resultLabel(c)}`,
+                    `Updated: ${latestUpdate(c, decisionRecord) || ""}`,
+                    "",
+                ];
+                if (c.category === "BL_COMPARISON") {
+                    lines.push("Seven-field comparison");
+                    for (const field of FIELDS) {
+                        const si = c.si_fields?.[field],
+                            bl = c.bl_fields?.[field];
+                        lines.push(
+                            `${prettyField(field)}: SI=${si?.raw_value ?? "Missing"} | Draft BL=${bl?.raw_value ?? "Missing"} | ${fieldResult(si, bl)[0]}`,
+                        );
+                        for (const [role, value] of [
+                            ["SI", si],
+                            ["Draft BL", bl],
+                        ])
+                            if (value)
+                                lines.push(
+                                    `  ${role} evidence: document=${value.source || c.documents?.[role === "SI" ? "si" : "bl"] || "Unknown"}; page=${value.page || "N/A"}; method=${value.method || "native"}; text=${value.source_text || value.raw_value || "Unavailable"}`,
+                                );
+                    }
+                    lines.push(
+                        "",
+                        `Discrepancies: ${(c.mismatches || []).length}`,
+                    );
+                }
+                const assignment = decisionRecord.assignment || {};
+                lines.push(
+                    `Reviewer: ${assignment.reviewer || "Unassigned"}`,
+                    `Priority: ${assignment.priority || "Normal"}`,
+                    `Due: ${assignment.due || "Not set"}`,
+                );
+                if (decisionRecord.feedback)
+                    lines.push(
+                        `Feedback: ${decisionRecord.feedback.outcome}; cause=${decisionRecord.feedback.cause}; ${decisionRecord.feedback.comment || ""}`,
+                    );
+                return lines.join("\n");
+            }
+            function downloadText(filename, text, type = "text/plain") {
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(new Blob([text], { type }));
+                link.download = filename;
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            }
+            function renderCaseManagement(c, area) {
+                const saved = state.decisions[c.email_id] || {},
+                    panel = section("Case management");
+                const assignment = saved.assignment || {},
+                    assignmentRow = node("div", "", "toolbar");
+                const reviewer = node("input"),
+                    priority = node("select"),
+                    due = node("input");
+                reviewer.placeholder = "Reviewer name";
+                reviewer.value = assignment.reviewer || "";
+                for (const value of ["low", "normal", "high", "urgent"]) {
+                    const optionNode = node(
+                        "option",
+                        value[0].toUpperCase() + value.slice(1),
+                    );
+                    optionNode.value = value;
+                    priority.append(optionNode);
+                }
+                priority.value = assignment.priority || "normal";
+                due.type = "date";
+                due.value = assignment.due || "";
+                assignmentRow.append(
+                    add(node("label", "Reviewer ", "filter-field"), reviewer),
+                    add(node("label", "Priority ", "filter-field"), priority),
+                    add(node("label", "Due date ", "filter-field"), due),
+                    button(
+                        "Save assignment",
+                        () =>
+                            decision(c.email_id, "update_assignment", {
+                                reviewer: reviewer.value,
+                                priority: priority.value,
+                                due: due.value,
+                            }),
+                        "small-btn primary",
+                    ),
+                );
+                const feedback = saved.feedback || {},
+                    feedbackRow = node("div", "", "toolbar"),
+                    outcome = node("select"),
+                    cause = node("select"),
+                    comment = node("input");
+                [
+                    ["accepted", "Accepted"],
+                    ["corrected", "Corrected"],
+                ].forEach(([value, label]) => {
+                    const optionNode = node("option", label);
+                    optionNode.value = value;
+                    outcome.append(optionNode);
+                });
+                [
+                    ["none", "No issue"],
+                    ["classification", "Classification"],
+                    ["extraction", "Extraction"],
+                    ["comparison", "Comparison"],
+                    ["other", "Other"],
+                ].forEach(([value, label]) => {
+                    const optionNode = node("option", label);
+                    optionNode.value = value;
+                    cause.append(optionNode);
+                });
+                outcome.value = feedback.outcome || "accepted";
+                cause.value = feedback.cause || "none";
+                comment.placeholder = "Optional feedback note";
+                comment.value = feedback.comment || "";
+                feedbackRow.append(
+                    add(node("label", "Result ", "filter-field"), outcome),
+                    add(node("label", "Issue source ", "filter-field"), cause),
+                    add(node("label", "Comment ", "filter-field"), comment),
+                    button(
+                        "Save feedback",
+                        () =>
+                            decision(c.email_id, "reviewer_feedback", {
+                                outcome: outcome.value,
+                                cause: cause.value,
+                                comment: comment.value,
+                            }),
+                        "small-btn",
+                    ),
+                );
+                panel.append(
+                    node("h3", "Assignment"),
+                    assignmentRow,
+                    node("h3", "Reviewer feedback"),
+                    feedbackRow,
+                    add(
+                        node("div", "", "actions"),
+                        button(
+                            "Download verification report",
+                            () =>
+                                downloadText(
+                                    `SEAL-${c.email_id}-report.txt`,
+                                    caseReport(c),
+                                ),
+                            "primary",
+                        ),
+                    ),
+                );
+                const events = saved.activity || [];
+                const baseline = [
+                    `Classified as ${LABEL[c.category] || c.category}`,
+                    c.category === "BL_COMPARISON"
+                        ? "Documents identified and fields extracted"
+                        : "Routed to category workflow",
+                    `Result recorded: ${resultLabel(c)}`,
+                ];
+                const history = node("details");
+                history.append(
+                    node(
+                        "summary",
+                        `Activity history (${baseline.length + events.length})`,
+                    ),
+                );
+                const list = node("ol", "", "muted");
+                for (const event of [...events].reverse())
+                    list.append(
+                        node(
+                            "li",
+                            `${shortDate(event.at)} · ${String(event.action || "update").replaceAll("_", " ")}${event.note ? " · " + event.note : ""}`,
+                        ),
+                    );
+                for (const event of baseline.reverse())
+                    list.append(
+                        node("li", `${shortDate(c.updated_at)} · ${event}`),
+                    );
+                history.append(list);
+                panel.append(history);
+                area.append(panel);
+            }
+            function renderCategoryWorkflow(c, area) {
+                const { config, workflowState, label, guidance } =
+                        categoryWorkflowInfo(c),
+                    panel = section(config.title),
+                    stateRow = node("div", "", "toolbar"),
+                    stateSelect = node("select"),
+                    actions = node("div", "", "actions");
+                stateSelect.setAttribute("aria-label", "Workflow status");
+                for (const [value, details] of Object.entries(config.states)) {
+                    const optionNode = node("option", details[0]);
+                    optionNode.value = value;
+                    stateSelect.append(optionNode);
+                }
+                stateSelect.value = workflowState;
+                stateRow.append(
+                    add(
+                        node("label", "Workflow status ", "filter-field"),
+                        stateSelect,
+                    ),
+                    button(
+                        "Save workflow status",
+                        () =>
+                            decision(c.email_id, "update_category_workflow", {
+                                workflow_state: stateSelect.value,
+                            }),
+                        "small-btn primary",
+                    ),
+                );
+                panel.append(
+                    node("p", label, "notice"),
+                    node("p", guidance),
+                    stateRow,
+                );
+                if (c.category !== "SPAM")
+                    actions.append(
+                        button("Prepare response draft", () =>
+                            showCategoryDraft(c, panel),
+                        ),
+                    );
+                actions.append(button("View full email", openEmailSource));
+                panel.append(actions);
+                area.append(panel);
+            }
+            function showCategoryDraft(c, panel) {
+                const subject = c.email?.subject || c.email_id,
+                    drafts = {
+                        SI_REQUEST: `Subject: Re: ${subject}\n\nHello,\n\nWe are reviewing the shipping instruction request. Please provide any missing shipment details or documents so we can proceed.\n\nThank you.`,
+                        INVOICE_QUERY: `Subject: Re: ${subject}\n\nHello,\n\nWe have received your invoice or payment query and forwarded it to the finance team for review. We will follow up when the details are confirmed.\n\nThank you.`,
+                        GENERAL: `Subject: Re: ${subject}\n\nHello,\n\nThank you for your message. We have reviewed it and will route any required follow-up to the appropriate team.\n\nThank you.`,
+                    };
+                let slot = panel.querySelector(".category-draft");
+                if (!slot) {
+                    slot = node("pre", "", "draft category-draft");
+                    panel.append(slot);
+                }
+                slot.textContent = drafts[c.category] || "";
+            }
+            function openEmailSource() {
+                const details = $("email-details");
+                if (!details) return;
+                details.open = true;
+                details.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+            function renderProcessingMethod(c, area) {
+                const panel = section("Processing method"),
+                    list = node("ul", "", "muted");
+                if (c.category !== "BL_COMPARISON") {
+                    list.append(
+                        node(
+                            "li",
+                            "Email classification: deterministic rules with validated Gemini fallback when intent is uncertain.",
+                        ),
+                        node(
+                            "li",
+                            `Workflow routing: ${LABEL[c.category] || c.category} queue.`,
+                        ),
+                        node(
+                            "li",
+                            "Final handling: a reviewer reads, responds, routes, or confirms the message and records completion.",
+                        ),
+                    );
+                    panel.append(
+                        node(
+                            "p",
+                            "Email → Classification → Category workflow → Reviewer action → Completed",
+                            "notice",
+                        ),
+                        list,
+                    );
+                    area.append(panel);
+                    return;
+                }
+                [
+                    "Email classification: deterministic rules with validated Gemini fallback when intent is uncertain.",
+                    "Document extraction: native parsing first; Gemini Vision/OCR can assist scanned PDFs when requested.",
+                    "Field normalization and document validation: deterministic rules.",
+                    "SI and draft BL comparison: deterministic rules across the seven required fields.",
+                    "Final verification: rules return no mismatch, mismatch, or human review; Gemini does not make the final decision.",
+                ].forEach((text) => list.append(node("li", text)));
+                panel.append(
+                    node(
+                        "p",
+                        "Email / Documents → Classification → Extraction → Gemini fallback when needed → Normalization and validation → Deterministic comparison → Match / Mismatch / Human review",
+                        "notice",
+                    ),
+                    list,
+                );
+                if (c.status === "NEEDS_REVIEW")
+                    panel.append(
+                        node(
+                            "p",
+                            "This case stopped for human review instead of guessing from uncertain evidence.",
+                            "muted",
+                        ),
+                    );
+                area.append(panel);
+            }
+            function fieldResult(a, b) {
+                if (
+                    !a ||
+                    !b ||
+                    a.normalized_value == null ||
+                    b.normalized_value == null ||
+                    a.confidence < 0.9 ||
+                    b.confidence < 0.9
+                )
+                    return ["Needs review", "review"];
+                return a.normalized_value === b.normalized_value
+                    ? ["Match", "match"]
+                    : ["Mismatch", "mismatch"];
+            }
+            function fieldCell(f, showNormalized = false) {
+                const td = node("td");
+                if (!f) return add(td, node("span", "Missing", "muted"));
+                td.append(node("div", f.raw_value, "raw"));
+                if (showNormalized && f.normalized_value != null)
+                    td.append(
+                        node(
+                            "span",
+                            "Compared as: " + String(f.normalized_value),
+                            "sub",
+                        ),
+                    );
+                td.append(
+                    node(
+                        "span",
+                        `Evidence: ${f.source || "Unknown document"}` +
+                            (f.page ? ` · page ${f.page}` : "") +
+                            ` · ${f.method || "native extraction"}` +
+                            (f.source_text ? ` · “${f.source_text}”` : ""),
+                        "sub",
+                    ),
+                );
+                if (f.confidence < 0.9)
+                    td.append(
+                        node(
+                            "span",
+                            "Source: " +
+                                (f.source_text || f.source || "Unknown") +
+                                " · " +
+                                Math.round((f.confidence || 0) * 100) +
+                                "% confidence",
+                            "sub",
+                        ),
+                    );
+                td.title = f.source_text || f.source || "";
+                return td;
+            }
+            function renderComparison(c, area) {
+                const sectionNode = section("Shipping Instruction vs draft BL"),
+                    table = node("table", "", "compare");
+                table.append(
+                    add(
+                        node("thead"),
+                        add(
+                            node("tr"),
+                            ...[
+                                "Field",
+                                "Shipping Instruction",
+                                "Draft BL",
+                                "Result",
+                            ].map((t) => node("th", t)),
+                        ),
+                    ),
+                );
+                const body = node("tbody");
+                FIELDS.forEach((name) => {
+                    const si = c.si_fields?.[name],
+                        bl = c.bl_fields?.[name],
+                        [label, kind] = fieldResult(si, bl),
+                        showNorm =
+                            kind === "match" &&
+                            si &&
+                            bl &&
+                            String(si.raw_value)
+                                .toLowerCase()
+                                .replace(/\s/g, "") !==
+                                String(bl.raw_value)
+                                    .toLowerCase()
+                                    .replace(/\s/g, "");
+                    const row = node(
+                        "tr",
+                        "",
+                        kind === "mismatch"
+                            ? "mismatch clickable"
+                            : kind === "review"
+                              ? "uncertain"
+                              : "",
+                    );
+                    if (kind === "mismatch") {
+                        const index = (c.mismatches || []).findIndex(
+                            (m) => m.field === name,
+                        );
+                        row.tabIndex = 0;
+                        row.setAttribute(
+                            "aria-label",
+                            "Open " + prettyField(name) + " mismatch details",
+                        );
+                        row.onclick = () => selectMismatch(c, index);
+                        row.onkeydown = (event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                selectMismatch(c, index);
+                            }
+                        };
+                        if (index === state.mismatch)
+                            row.classList.add("selected");
+                    }
+                    row.append(
+                        node("td", prettyField(name)),
+                        fieldCell(si, showNorm),
+                        fieldCell(bl, showNorm),
+                        add(
+                            node("td", label, "result " + kind),
+                            ...(kind === "mismatch"
+                                ? [
+                                      node(
+                                          "div",
+                                          "View source evidence",
+                                          "secondary-text",
+                                      ),
+                                  ]
+                                : []),
+                        ),
+                    );
+                    body.append(row);
+                });
+                table.append(body);
+                sectionNode.append(add(node("div", "", "table-scroll"), table));
+                if (c.mismatches?.length) {
+                    sectionNode.append(
+                        node(
+                            "p",
+                            "Select a highlighted row to inspect the discrepancy and source evidence.",
+                            "muted",
+                        ),
+                        node("div", "", "mismatch-slot"),
+                    );
+                    renderMismatchDetail(
+                        c,
+                        sectionNode.querySelector(".mismatch-slot"),
+                    );
+                }
+                if (c.validation) {
+                    const lines = [];
+                    if (c.validation.pairing?.conflicts?.length)
+                        lines.push(
+                            "Conflicting shipment identifiers: " +
+                                c.validation.pairing.conflicts.join(", "),
+                        );
+                    for (const [role, result] of Object.entries(
+                        c.validation.consistency || {},
+                    ))
+                        if (!result.valid)
+                            lines.push(
+                                role.toUpperCase() + ": " + result.evidence,
+                            );
+                    if (lines.length)
+                        sectionNode.append(
+                            node("div", lines.join("\n"), "notice error"),
+                        );
+                }
+                area.append(sectionNode);
+            }
+            function selectMismatch(c, index) {
+                state.mismatch = index;
+                document
+                    .querySelectorAll(".compare tr.mismatch")
+                    .forEach((row, i) =>
+                        row.classList.toggle("selected", i === index),
+                    );
+                const slot = document.querySelector(".mismatch-slot");
+                renderMismatchDetail(c, slot);
+                slot?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
+            function renderMismatchDetail(c, slot) {
+                if (!slot) return;
+                const m = c.mismatches?.[state.mismatch];
+                slot.replaceChildren();
+                if (!m) return;
+                const panel = node("div", "", "mismatch-panel"),
+                    values = node("div", "", "evidence-grid");
+                values.append(
+                    add(
+                        node("div", "", "evidence-box"),
+                        node("strong", "Shipping Instruction"),
+                        node("div", m.si.raw_value),
+                        node(
+                            "p",
+                            "Source: " +
+                                (m.si.source_text ||
+                                    m.si.source ||
+                                    "Unavailable"),
+                            "field-evidence",
+                        ),
+                    ),
+                    add(
+                        node("div", "", "evidence-box"),
+                        node("strong", "Draft BL"),
+                        node("div", m.bl.raw_value),
+                        node(
+                            "p",
+                            "Source: " +
+                                (m.bl.source_text ||
+                                    m.bl.source ||
+                                    "Unavailable"),
+                            "field-evidence",
+                        ),
+                    ),
+                );
+                panel.append(
+                    node("h3", prettyField(m.field) + " — mismatch detected"),
+                    node("p", prettyField(m.field) + " values differ."),
+                    values,
+                );
+                const controls = add(
+                    node("div", "", "actions"),
+                    button(
+                        "Confirm mismatch",
+                        () => decision(c.email_id, "confirm"),
+                        "primary",
+                    ),
+                    button("Open SI source", () => openSource(c, "si")),
+                    button("Open BL source", () => openSource(c, "bl")),
+                );
+                if (state.decisions[c.email_id]?.action === "confirm")
+                    controls.append(
+                        button("Draft correction email", () =>
+                            draft(c.email_id, panel),
+                        ),
+                    );
+                panel.append(controls);
+                slot.append(panel);
+            }
+            function renderReview(c, area) {
+                if (c.status === "OK" || c.status === "MISMATCH") {
+                    if (c.status === "OK")
+                        area.append(
+                            add(
+                                section("Verification complete"),
+                                node(
+                                    "p",
+                                    "All seven required fields match after normalization.",
+                                    "notice",
+                                ),
+                            ),
+                        );
+                    return;
+                }
+                const panel = section(
+                    c.status === "PROCESSING_FAILED"
+                        ? "Processing failed"
+                        : c.status === "PROCESSING"
+                          ? "Processing"
+                          : "Human review required",
+                );
+                if (c.status === "PROCESSING") {
+                    panel.append(
+                        node(
+                            "p",
+                            c.processing_step ||
+                                "Document verification is in progress.",
+                            "notice",
+                        ),
+                    );
+                    area.append(panel);
+                    return;
+                }
+                if (
+                    state.decisions[c.email_id]?.action === "resolve" &&
+                    c.status === "NEEDS_REVIEW"
+                ) {
+                    panel.append(
+                        node(
+                            "p",
+                            "Review completed by an operator. The original evidence remains available below.",
+                            "notice",
+                        ),
+                        add(
+                            node("div", "", "actions"),
+                            button(
+                                "Undo review completion",
+                                () => decision(c.email_id, "reopen"),
+                                "primary",
+                            ),
+                        ),
+                    );
+                    area.append(panel);
+                    return;
+                }
+                const i = issue(c);
+                panel.append(
+                    node(
+                        "div",
+                        i.name + ": " + i.reason,
+                        "notice " +
+                            (c.status === "PROCESSING_FAILED"
+                                ? "error"
+                                : "warning"),
+                    ),
+                    node("p", "Recommended action: " + nextAction(c)),
+                );
+                const actions = node("div", "", "actions"),
+                    hasPdf = c.email?.attachments?.some((path) =>
+                        path.toLowerCase().endsWith(".pdf"),
+                    );
+                if (c.status === "PROCESSING_FAILED") {
+                    actions.append(
+                        button(
+                            "Retry processing",
+                            () => retry(c.email_id),
+                            "primary",
+                        ),
+                    );
+                    if (state.features.ai_enabled && hasPdf)
+                        actions.append(
+                            button("Retry with OCR / Vision", () =>
+                                retry(c.email_id, true),
+                            ),
+                        );
+                    panel.append(actions);
+                    area.append(panel);
+                    return;
+                }
+                const saved = state.decisions[c.email_id];
+                if (saved)
+                    panel.append(
+                        node(
+                            "p",
+                            "Reviewer action: " +
+                                saved.action.replaceAll("_", " ") +
+                                (saved.note ? " · " + saved.note : ""),
+                            "notice",
+                        ),
+                    );
+                if (state.features.ai_enabled)
+                    actions.append(
+                        button("Explain review with AI", () =>
+                            explain(c.email_id, panel),
+                        ),
+                    );
+                if (!c.si_fields && !c.bl_fields) {
+                    panel.append(
+                        node(
+                            "p",
+                            c.email?.attachments?.length
+                                ? "Expand Attachments below to inspect or assign document roles."
+                                : "No attachments are available in this case.",
+                            "muted",
+                        ),
+                    );
+                    actions.append(
+                        button("View source evidence", () =>
+                            openSource(c, "si"),
+                        ),
+                        button("Retry extraction", () => retry(c.email_id)),
+                        button("Resolve case", () =>
+                            decision(c.email_id, "resolve"),
+                        ),
+                    );
+                    if (state.features.ai_enabled && hasPdf)
+                        actions.append(
+                            button("Retry with OCR / Vision", () =>
+                                retry(c.email_id, true),
+                            ),
+                        );
+                    panel.append(actions);
+                    area.append(panel);
+                    return;
+                }
+                const selected =
+                        c.uncertain_fields?.[0] ||
+                        c.missing_fields?.[0] ||
+                        FIELDS[0],
+                    roleName = !c.si_fields?.[selected]
+                        ? "si"
+                        : !c.bl_fields?.[selected]
+                          ? "bl"
+                          : c.si_fields?.[selected]?.confidence < 0.9
+                            ? "si"
+                            : c.bl_fields?.[selected]?.confidence < 0.9
+                              ? "bl"
+                              : "si";
+                const fieldData = c[roleName + "_fields"]?.[selected];
+                if (fieldData)
+                    panel.append(
+                        node(
+                            "p",
+                            prettyField(selected) +
+                                ": " +
+                                fieldData.raw_value +
+                                " · " +
+                                Math.round((fieldData.confidence || 0) * 100) +
+                                "% confidence · Source: " +
+                                (fieldData.source_text ||
+                                    fieldData.source ||
+                                    "Unknown"),
+                            "field-evidence",
+                        ),
+                    );
+                const row = node("div", "", "form-row"),
+                    role = node("select"),
+                    field = node("select"),
+                    value = node("input");
+                role.setAttribute("aria-label", "Document to review");
+                field.setAttribute("aria-label", "Field to review");
+                role.append(node("option", "SI"), node("option", "BL"));
+                role.value = roleName.toUpperCase();
+                FIELDS.forEach((f) => {
+                    const option = node("option", prettyField(f));
+                    option.value = f;
+                    field.append(option);
+                });
+                field.value = selected;
+                value.placeholder = "Enter corrected value";
+                value.setAttribute("aria-label", "Corrected value");
+                row.append(role, field, value);
+                panel.append(row);
+                if (fieldData)
+                    actions.append(
+                        button("View source evidence", () =>
+                            openSource(c, roleName),
+                        ),
+                        button(
+                            "Confirm selected value",
+                            () =>
+                                decision(c.email_id, "confirm_value", {
+                                    role: role.value.toLowerCase(),
+                                    field: field.value,
+                                }),
+                            "primary",
+                        ),
+                    );
+                actions.append(
+                    button("Save corrected value", () =>
+                        decision(c.email_id, "correct", {
+                            role: role.value.toLowerCase(),
+                            field: field.value,
+                            value: value.value,
+                        }),
+                    ),
+                );
+                if (c.si_fields?.[selected] && c.bl_fields?.[selected])
+                    actions.append(
+                        button("Mark values equivalent", () =>
+                            decision(c.email_id, "mark_equivalent", {
+                                field: field.value,
+                            }),
+                        ),
+                    );
+                actions.append(
+                    button("Retry extraction", () => retry(c.email_id)),
+                );
+                if (state.features.ai_enabled && hasPdf)
+                    actions.append(
+                        button("Retry with OCR / Vision", () =>
+                            retry(c.email_id, true),
+                        ),
+                    );
+                actions.append(
+                    button("Resolve case", () =>
+                        decision(c.email_id, "resolve"),
+                    ),
+                );
+                panel.append(actions);
+                area.append(panel);
+            }
+            function renderSource(c, e, area) {
+                const grid = node("div", "", "detail-grid"),
+                    mail = node("section", "", "card"),
+                    mailDetails = node("details");
+                mailDetails.id = "email-details";
+                mailDetails.append(
+                    node("summary", "Full email"),
+                    add(
+                        node("dl", "", "meta"),
+                        ...metadata("From", e.from),
+                        ...metadata("To", e.to),
+                        ...metadata("Subject", e.subject),
+                    ),
+                    node("pre", e.body || "No email body", "email-body"),
+                );
+                mail.append(mailDetails);
+                const files = node("section", "", "card"),
+                    fileDetails = node("details");
+                fileDetails.id = "attachments-details";
+                const paths = e.attachments || [];
+                fileDetails.append(
+                    node("summary", "Attachments (" + paths.length + ")"),
+                );
+                if (!paths.length)
+                    fileDetails.append(
+                        node(
+                            "p",
+                            "No attachments were supplied.",
+                            "notice error",
+                        ),
+                    );
+                else {
+                    const list = node("div", "", "file-list");
+                    paths.forEach((path, index) => {
+                        const role =
+                                c.documents?.si === path
+                                    ? "Shipping Instruction / Reference"
+                                    : c.documents?.bl === path
+                                      ? "Draft Bill of Lading"
+                                      : "Other / unassigned",
+                            fileButton = add(
+                                node("button", "", "file"),
+                                node("strong", path.split("/").pop()),
+                                node("small", role),
+                            );
+                        fileButton.onclick = () =>
+                            preview(c.email_id, index, path, fileDetails);
+                        list.append(fileButton);
+                    });
+                    fileDetails.append(list, node("div", "", "preview-slot"));
+                    if (
+                        [
+                            "AMBIGUOUS_DOCUMENT_ROLE",
+                            "POSSIBLE_WRONG_DOCUMENT_PAIR",
+                        ].includes(c.internal_reason)
+                    )
+                        fileDetails.open = true;
+                }
+                files.append(fileDetails);
+                grid.append(mail, files);
+                area.append(grid);
+            }
+            async function preview(id, index, path, details) {
+                details.open = true;
+                const slot = details.querySelector(".preview-slot");
+                if (!slot) return;
+                slot.replaceChildren(
+                    node("p", "Loading " + path + "…", "muted"),
+                );
+                const c = state.cases[id],
+                    select = node("div", "", "actions");
+                if (c.category === "BL_COMPARISON")
+                    select.append(
+                        button("Use as SI", () =>
+                            selectDocument(id, "si", path),
+                        ),
+                        button("Use as draft BL", () =>
+                            selectDocument(id, "bl", path),
+                        ),
+                    );
+                try {
+                    if (path.toLowerCase().endsWith(".pdf")) {
+                        const source = window.SPARK_MODE
+                            ? window.sparkAttachmentUrl(id, index)
+                            : apiPath("attachment", id, index);
+                        if (source) {
+                            const frame = node("iframe");
+                            frame.src = source;
+                            frame.title = path;
+                            slot.replaceChildren(select, frame);
+                        } else {
+                            const doc = await request(
+                                apiPath("document", id, index),
+                            );
+                            slot.replaceChildren(select);
+                            slot.append(
+                                doc.text &&
+                                    doc.text !== "Source text is unavailable."
+                                    ? node("pre", doc.text, "doc-text")
+                                    : node(
+                                          "p",
+                                          "The PDF file is not stored in the cloud. Use Retry with OCR / Vision to select the original SI and BL files.",
+                                          "notice warning",
+                                      ),
+                            );
+                        }
+                    } else {
+                        const doc = await request(
+                            apiPath("document", id, index),
+                        );
+                        slot.replaceChildren(
+                            select,
+                            node("pre", doc.text, "doc-text"),
+                        );
+                    }
+                } catch (error) {
+                    slot.replaceChildren(
+                        select,
+                        node("p", error.message, "notice error"),
+                    );
+                }
+            }
+            function openSource(c, role) {
+                const path = c.documents?.[role],
+                    paths =
+                        (state.email?.email_id === c.email_id
+                            ? state.email
+                            : c.email
+                        )?.attachments || [],
+                    index = paths.indexOf(path),
+                    details = $("attachments-details");
+                if (!details) return;
+                details.open = true;
+                details.scrollIntoView({ behavior: "smooth", block: "start" });
+                if (index >= 0) preview(c.email_id, index, path, details);
+            }
+            async function refresh() {
+                const preferredStatus = $("status-filter").value;
+                const data = await request("/api/cases");
+                Object.assign(state, data);
+                populateStatusFilter(preferredStatus);
+                render();
+                if (state.page === "case") await fetchEmail(state.selected);
+            }
+            async function decision(id, action, extra = {}) {
+                try {
+                    await request(apiPath("decision", id), {
+                        action,
+                        ...extra,
+                    });
+                    await refresh();
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
+            async function retry(id, vision = false) {
+                try {
+                    const old = state.cases[id];
+                    state.cases[id] = {
+                        ...old,
+                        status: "PROCESSING",
+                        processing_step: vision
+                            ? window.SPARK_MODE
+                                ? "Reanalyzing with Gemini"
+                                : "Retrying with OCR / Vision"
+                            : "Retrying document verification",
+                    };
+                    state.metrics.processing =
+                        (state.metrics.processing || 0) + 1;
+                    if (state.page === "dashboard") {
+                        $("status-filter").value = "PROCESSING";
+                    }
+                    render();
+                    await request(apiPath("retry", id), { vision });
+                    if (state.page === "dashboard")
+                        $("status-filter").value = "all";
+                    await refresh();
+                } catch (error) {
+                    if (state.page === "dashboard")
+                        $("status-filter").value = "all";
+                    await refresh();
+                    alert(error.message);
+                }
+            }
+            async function selectDocument(id, role, path) {
+                try {
+                    await request(apiPath("select_document", id), {
+                        role,
+                        path,
+                    });
+                    await refresh();
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
+            async function explain(id, panel) {
+                try {
+                    const result = await request(apiPath("explain", id), {});
+                    panel.append(
+                        node(
+                            "p",
+                            result.explanation +
+                                " Recommended action: " +
+                                result.action,
+                            "notice",
+                        ),
+                    );
+                } catch (error) {
+                    panel.append(node("p", error.message, "notice error"));
+                }
+            }
+            async function draft(id, panel) {
+                try {
+                    const result = await request(apiPath("draft", id), {});
+                    panel.append(node("pre", result.draft, "draft"));
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
+            function renderAfterManualFilter() {
+                state.reasonFilter = null;
+                state.summaryFilter = null;
+                renderDashboard();
+            }
+            function renderLocalVerifyCard() {
+                if (window.SPARK_MODE) return;
+                const card = node("section", "", "card");
+                card.innerHTML = `
+                    <div class="card-head">
+                        <h2>Verify documents</h2>
+                        <span class="badge">Local workspace</span>
+                    </div>
+                    <p class="muted">
+                        Review documents from the configured inbox. The Python
+                        pipeline processes the local Bundle or Docker inbox;
+                        upload processing is available in the Spark workspace.
+                    </p>
+                    <label class="filter-field">Upload type
+                        <select disabled aria-label="Upload type">
+                            <option>One email with SI and BL</option>
+                            <option>Mixed SI/BL files or folder</option>
+                            <option>Separate SI and BL folders</option>
+                        </select>
+                    </label>
+                    <div class="toolbar">
+                        <input disabled placeholder="Sender email" aria-label="Sender email" />
+                        <input disabled placeholder="Email subject" aria-label="Email subject" />
+                        <button class="small-btn primary" type="button" disabled>
+                            Verify documents
+                        </button>
+                    </div>
+                    <p class="notice">
+                        Start the batch processor with
+                        <code>python3 main/main.py</code> to process the
+                        configured inbox, then refresh this dashboard.
+                    </p>`;
+                $("new-email-form-slot").append(card);
+            }
+            $("back-button").onclick = showDashboard;
+            $("verify-documents").onclick = () => {
+                showDashboard();
+                setTimeout(() =>
+                    $("new-email-form-slot").scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                    }),
+                );
+            };
+            $("review-exceptions").onclick = () =>
+                applySummaryFilter("summary:review", {
+                    status: "NEEDS_REVIEW",
+                });
+            $("search").oninput = renderAfterManualFilter;
+            $("category-filter").onchange = () => {
+                populateStatusFilter();
+                renderAfterManualFilter();
+            };
+            $("status-filter").onchange = renderAfterManualFilter;
+            $("date-filter").onchange = () => {
+                state.reasonFilter = null;
+                state.summaryFilter = null;
+                const custom = $("date-filter").value === "custom";
+                $("date-from-field").classList.toggle("hidden", !custom);
+                $("date-to-field").classList.toggle("hidden", !custom);
+                renderDashboard();
+            };
+            $("date-from").onchange = renderAfterManualFilter;
+            $("date-to").onchange = renderAfterManualFilter;
+            $("clear-filters").onclick = () => {
+                state.reasonFilter = null;
+                state.summaryFilter = null;
+                $("search").value = "";
+                $("category-filter").value = "all";
+                populateStatusFilter();
+                $("date-filter").value = "all";
+                $("date-from").value = "";
+                $("date-to").value = "";
+                $("date-from-field").classList.add("hidden");
+                $("date-to-field").classList.add("hidden");
+                renderDashboard();
+            };
+            populateStatusFilter();
+            renderLocalVerifyCard();
+            window.addEventListener("hashchange", route);
+            if (window.SPARK_MODE)
+                window.addEventListener("spark-case-added", async () => {
+                    await refresh();
+                    route();
+                });
+            if (window.SPARK_MODE)
+                window.addEventListener("spark-ready", load, { once: true });
+            else load();
+        </script>
     </body>
 </html>
