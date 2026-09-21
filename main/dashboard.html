@@ -110,7 +110,9 @@
             }
             .metric.interactive {
                 cursor: pointer;
-                transition: border-color 120ms ease, transform 120ms ease;
+                transition:
+                    border-color 120ms ease,
+                    transform 120ms ease;
             }
             .metric.interactive:hover,
             .metric.interactive:focus-visible,
@@ -592,23 +594,48 @@
                     </div>
                     <h1>SEAL</h1>
                     <p class="subtitle">
-                        Shipping document verification. AI understands. Rules verify. Humans resolve exceptions.
+                        Shipping document verification. AI understands. Rules
+                        verify. Humans resolve exceptions.
                         <span id="ai-state"></span>
                     </p>
                 </div>
                 <div class="header-actions" aria-label="Primary actions">
-                    <button id="verify-documents" class="small-btn primary" type="button">Verify documents</button>
-                    <button id="review-exceptions" class="small-btn" type="button">Review exceptions</button>
+                    <button
+                        id="verify-documents"
+                        class="small-btn primary"
+                        type="button"
+                    >
+                        Verify documents
+                    </button>
+                    <button
+                        id="review-exceptions"
+                        class="small-btn"
+                        type="button"
+                    >
+                        Review exceptions
+                    </button>
                 </div>
             </header>
             <main id="dashboard-view">
                 <section id="spark-auth" class="card hidden">
-                    <p id="spark-status" class="notice">Connecting to Firebase…</p>
+                    <p id="spark-status" class="notice">
+                        Connecting to Firebase…
+                    </p>
                 </section>
-                <div id="system-status" class="status-strip" aria-label="System status">
-                    <span id="dataset-status" class="status-item">Dataset loading</span>
-                    <span id="firestore-status" class="status-item">Local workspace</span>
-                    <span id="gemini-status" class="status-item">Gemini unavailable</span>
+                <div
+                    id="system-status"
+                    class="status-strip"
+                    aria-label="System status"
+                >
+                    <span id="dataset-status" class="status-item"
+                        >Dataset loading</span
+                    >
+                    <span id="firestore-status" class="status-item"
+                        >Local workspace</span
+                    >
+                    <span id="gemini-status" class="status-item"
+                        >Gemini unavailable</span
+                    >
                 </div>
                 <div id="new-email-form-slot"></div>
                 <section class="card" id="overview-card">
@@ -616,25 +643,53 @@
                         <h2>Dataset and Verification Overview</h2>
                         <span class="muted">Provided dataset</span>
                     </div>
-                    <div id="metrics" class="metrics performance-metrics" aria-label="Dataset and verification summary"></div>
+                    <div
+                        id="metrics"
+                        class="metrics performance-metrics"
+                        aria-label="Dataset and verification summary"
+                    ></div>
                     <p id="performance-note" class="muted"></p>
                 </section>
                 <div class="summary-grid">
                     <section class="card">
-                        <div class="card-head"><h2>Verification Overview</h2></div>
-                        <div id="case-distribution" class="metrics performance-metrics"></div>
-                        <p class="muted">Document checks grouped by verification outcome. Select a card to view its cases.</p>
+                        <div class="card-head">
+                            <h2>Verification Overview</h2>
+                        </div>
+                        <div
+                            id="case-distribution"
+                            class="metrics performance-metrics"
+                        ></div>
+                        <p class="muted">
+                            Document checks grouped by verification outcome.
+                            Select a card to view its cases.
+                        </p>
                     </section>
                     <section class="card">
-                        <div class="card-head"><h2>Human Review Reasons</h2></div>
-                        <div id="review-reasons" class="metrics performance-metrics"></div>
-                        <p class="muted">Current unresolved reviews grouped by the reason manual action is required. Select a card to filter the table.</p>
+                        <div class="card-head">
+                            <h2>Human Review Reasons</h2>
+                        </div>
+                        <div
+                            id="review-reasons"
+                            class="metrics performance-metrics"
+                        ></div>
+                        <p class="muted">
+                            Current unresolved reviews grouped by the reason
+                            manual action is required. Select a card to filter
+                            the table.
+                        </p>
                     </section>
                 </div>
                 <section class="card">
                     <div class="card-head"><h2>Other Email Workflows</h2></div>
-                    <div id="category-workflows" class="metrics performance-metrics"></div>
-                    <p class="muted">SI requests, invoice questions, general messages, and spam remain actionable. Select a card to open that queue.</p>
+                    <div
+                        id="category-workflows"
+                        class="metrics performance-metrics"
+                    ></div>
+                    <p class="muted">
+                        SI requests, invoice questions, general messages, and
+                        spam remain actionable. Select a card to open that
+                        queue.
+                    </p>
                 </section>
                 <section class="card">
                     <div class="card-head">
@@ -647,22 +702,29 @@
                             placeholder="Search email, sender, or subject"
                             aria-label="Search emails"
                         />
-                        <label class="filter-field">Category
+                        <label class="filter-field"
+                            >Category
                             <select id="category-filter">
                                 <option value="all">All categories</option>
-                                <option value="BL_COMPARISON">Document comparison</option>
+                                <option value="BL_COMPARISON">
+                                    Document comparison
+                                </option>
                                 <option value="SI_REQUEST">SI request</option>
-                                <option value="INVOICE_QUERY">Invoice query</option>
+                                <option value="INVOICE_QUERY">
+                                    Invoice query
+                                </option>
                                 <option value="GENERAL">General</option>
                                 <option value="SPAM">Spam</option>
                             </select>
                         </label>
-                        <label class="filter-field">Workflow status
+                        <label class="filter-field"
+                            >Workflow status
                             <select id="status-filter">
                                 <option value="all">All statuses</option>
                             </select>
                         </label>
-                        <label class="filter-field">Date
+                        <label class="filter-field"
+                            >Date
                             <select id="date-filter">
                                 <option value="all">All time</option>
                                 <option value="today">Today</option>
@@ -671,15 +733,27 @@
                                 <option value="custom">Custom range</option>
                             </select>
                         </label>
-                        <label id="date-from-field" class="filter-field hidden">From
+                        <label id="date-from-field" class="filter-field hidden"
+                            >From
                             <input id="date-from" type="date" />
                         </label>
-                        <label id="date-to-field" class="filter-field hidden">To
+                        <label id="date-to-field" class="filter-field hidden"
+                            >To
                             <input id="date-to" type="date" />
                         </label>
-                        <button id="clear-filters" class="small-btn" type="button">Clear filters</button>
+                        <button
+                            id="clear-filters"
+                            class="small-btn"
+                            type="button"
+                        >
+                            Clear filters
+                        </button>
                     </div>
-                    <p class="muted">Attachments counts files listed on the source email. Zero means no files were attached; two usually means an SI and a draft BL.</p>
+                    <p class="muted">
+                        Attachments counts files listed on the source email.
+                        Zero means no files were attached; two usually means an
+                        SI and a draft BL.
+                    </p>
                     <div class="table-scroll">
                         <table class="master">
                             <thead>
@@ -701,7 +775,10 @@
                         <h2>New email history</h2>
                         <span id="new-email-count" class="muted"></span>
                     </div>
-                    <p class="muted">New emails and document batches submitted in this app appear here.</p>
+                    <p class="muted">
+                        New emails and document batches submitted in this app
+                        appear here.
+                    </p>
                     <div class="table-scroll">
                         <table class="master">
                             <thead>
@@ -752,44 +829,104 @@
                     title: "Shipping instruction request",
                     defaultState: "needs_response",
                     states: {
-                        needs_response: ["Response required", "Review the request and determine which shipping information or documents are needed."],
-                        waiting_for_information: ["Waiting for shipment information", "The sender or shipment owner must provide missing details before work can continue."],
-                        ready_to_prepare: ["Ready to prepare SI", "The required details are available and the shipping instruction can be prepared."],
-                        response_sent: ["Response sent", "A response or shipping instruction was sent; monitor for any reply."],
-                        completed: ["SI request completed", "The request is complete and requires no further action."],
+                        needs_response: [
+                            "Response required",
+                            "Review the request and determine which shipping information or documents are needed.",
+                        ],
+                        waiting_for_information: [
+                            "Waiting for shipment information",
+                            "The sender or shipment owner must provide missing details before work can continue.",
+                        ],
+                        ready_to_prepare: [
+                            "Ready to prepare SI",
+                            "The required details are available and the shipping instruction can be prepared.",
+                        ],
+                        response_sent: [
+                            "Response sent",
+                            "A response or shipping instruction was sent; monitor for any reply.",
+                        ],
+                        completed: [
+                            "SI request completed",
+                            "The request is complete and requires no further action.",
+                        ],
                     },
                 },
                 INVOICE_QUERY: {
                     title: "Invoice query",
                     defaultState: "needs_review",
                     states: {
-                        needs_review: ["Finance review required", "Review the invoice or payment question and identify the finance owner."],
-                        routed_to_finance: ["Routed to finance", "The query has been assigned to finance for investigation."],
-                        waiting_for_finance: ["Waiting for finance response", "Finance is reviewing the query; follow up if the response is overdue."],
-                        response_sent: ["Response sent", "The finance response was sent to the requester; monitor for follow-up."],
-                        completed: ["Invoice query completed", "The invoice or payment query is resolved."],
+                        needs_review: [
+                            "Finance review required",
+                            "Review the invoice or payment question and identify the finance owner.",
+                        ],
+                        routed_to_finance: [
+                            "Routed to finance",
+                            "The query has been assigned to finance for investigation.",
+                        ],
+                        waiting_for_finance: [
+                            "Waiting for finance response",
+                            "Finance is reviewing the query; follow up if the response is overdue.",
+                        ],
+                        response_sent: [
+                            "Response sent",
+                            "The finance response was sent to the requester; monitor for follow-up.",
+                        ],
+                        completed: [
+                            "Invoice query completed",
+                            "The invoice or payment query is resolved.",
+                        ],
                     },
                 },
                 GENERAL: {
                     title: "General email",
                     defaultState: "needs_review",
                     states: {
-                        needs_review: ["Message review required", "Read the message and decide whether to respond, forward, or archive it."],
-                        forwarded_to_owner: ["Forwarded to owner", "The message has been assigned to the appropriate owner."],
-                        waiting_for_response: ["Waiting for response", "An owner or external party must respond before this task can continue."],
-                        response_sent: ["Response sent", "A response was sent; monitor for any follow-up."],
-                        completed: ["General email completed", "The message has been handled and requires no further action."],
+                        needs_review: [
+                            "Message review required",
+                            "Read the message and decide whether to respond, forward, or archive it.",
+                        ],
+                        forwarded_to_owner: [
+                            "Forwarded to owner",
+                            "The message has been assigned to the appropriate owner.",
+                        ],
+                        waiting_for_response: [
+                            "Waiting for response",
+                            "An owner or external party must respond before this task can continue.",
+                        ],
+                        response_sent: [
+                            "Response sent",
+                            "A response was sent; monitor for any follow-up.",
+                        ],
+                        completed: [
+                            "General email completed",
+                            "The message has been handled and requires no further action.",
+                        ],
                     },
                 },
                 SPAM: {
                     title: "Spam review",
                     defaultState: "needs_review",
                     states: {
-                        needs_review: ["Spam review required", "Review the sender and content before taking action."],
-                        confirmed_spam: ["Confirmed as spam", "The classification was confirmed and the message is ready to archive."],
-                        restored_to_inbox: ["Restored to inbox", "A reviewer challenged the spam classification and returned the message for normal handling."],
-                        archived: ["Spam archived", "The spam message was archived or removed from the active queue."],
-                        completed: ["Spam review completed", "The spam review is complete and requires no further action."],
+                        needs_review: [
+                            "Spam review required",
+                            "Review the sender and content before taking action.",
+                        ],
+                        confirmed_spam: [
+                            "Confirmed as spam",
+                            "The classification was confirmed and the message is ready to archive.",
+                        ],
+                        restored_to_inbox: [
+                            "Restored to inbox",
+                            "A reviewer challenged the spam classification and returned the message for normal handling.",
+                        ],
+                        archived: [
+                            "Spam archived",
+                            "The spam message was archived or removed from the active queue.",
+                        ],
+                        completed: [
+                            "Spam review completed",
+                            "The spam review is complete and requires no further action.",
+                        ],
                     },
                 },
             };
@@ -860,28 +997,60 @@
                 if (c.category === "SI_REQUEST") {
                     if (/\b(request si|si needed)\b/.test(subject))
                         return "needs_response";
-                    const fieldSignals = ["shipper", "consignee", "notify", "pol:", "pod:", "container", "gross weight"]
-                        .filter((signal) => body.includes(signal)).length;
-                    if (fieldSignals >= 5 && !/\b(missing|awaiting|pending details|please provide)\b/.test(body))
+                    const fieldSignals = [
+                        "shipper",
+                        "consignee",
+                        "notify",
+                        "pol:",
+                        "pod:",
+                        "container",
+                        "gross weight",
+                    ].filter((signal) => body.includes(signal)).length;
+                    if (
+                        fieldSignals >= 5 &&
+                        !/\b(missing|awaiting|pending details|please provide)\b/.test(
+                            body,
+                        )
+                    )
                         return "ready_to_prepare";
-                    if (/\b(missing|awaiting|pending details|please provide|information needed)\b/.test(text))
+                    if (
+                        /\b(missing|awaiting|pending details|please provide|information needed)\b/.test(
+                            text,
+                        )
+                    )
                         return "waiting_for_information";
                     return "needs_response";
                 }
                 if (c.category === "INVOICE_QUERY") {
-                    if (/\b(still missing|awaiting|pending|not received|follow[ -]?up)\b/.test(text))
+                    if (
+                        /\b(still missing|awaiting|pending|not received|follow[ -]?up)\b/.test(
+                            text,
+                        )
+                    )
                         return "waiting_for_finance";
                     return "needs_review";
                 }
                 if (c.category === "GENERAL") {
-                    if (/\b(completed successfully|wishing everyone|office resumes|for your information|fyi)\b/.test(text))
+                    if (
+                        /\b(completed successfully|wishing everyone|office resumes|for your information|fyi)\b/.test(
+                            text,
+                        )
+                    )
                         return "completed";
-                    if (/\b(outstanding|pending items?|reminder|documents? to follow|awaiting)\b/.test(text))
+                    if (
+                        /\b(outstanding|pending items?|reminder|documents? to follow|awaiting)\b/.test(
+                            text,
+                        )
+                    )
                         return "waiting_for_response";
                     return "needs_review";
                 }
                 if (c.category === "SPAM") {
-                    if (/https?:\/\/|\b(won|winner|gift card|guaranteed|verify your account|unpaid customs fee)\b/.test(text))
+                    if (
+                        /https?:\/\/|\b(won|winner|gift card|guaranteed|verify your account|unpaid customs fee)\b/.test(
+                            text,
+                        )
+                    )
                         return "confirmed_spam";
                     return "needs_review";
                 }
@@ -891,17 +1060,28 @@
                 const config = CATEGORY_WORKFLOW[c.category],
                     decision = state.decisions[c.email_id];
                 if (!config) return null;
-                if (decision?.action === "complete_category") return "completed";
-                if (decision?.action === "update_category_workflow" &&
-                    config.states[decision.corrections?.workflow_state])
+                if (decision?.action === "complete_category")
+                    return "completed";
+                if (
+                    decision?.action === "update_category_workflow" &&
+                    config.states[decision.corrections?.workflow_state]
+                )
                     return decision.corrections.workflow_state;
                 return inferredCategoryWorkflowState(c);
             }
             function categoryWorkflowInfo(c) {
                 const config = CATEGORY_WORKFLOW[c.category],
                     workflowState = categoryWorkflowState(c);
-                return { config, workflowState, label: config?.states[workflowState]?.[0] || "Email action required",
-                    guidance: config?.states[workflowState]?.[1] || "Review this email." };
+                return {
+                    config,
+                    workflowState,
+                    label:
+                        config?.states[workflowState]?.[0] ||
+                        "Email action required",
+                    guidance:
+                        config?.states[workflowState]?.[1] ||
+                        "Review this email.",
+                };
             }
             function resultLabel(c) {
                 return c.category !== "BL_COMPARISON"
@@ -1067,7 +1247,10 @@
                 card.classList.toggle("active", state.summaryFilter === key);
                 card.tabIndex = 0;
                 card.setAttribute("role", "button");
-                card.setAttribute("aria-label", `${title}: ${value}. Filter emails.`);
+                card.setAttribute(
+                    "aria-label",
+                    `${title}: ${value}. Filter emails.`,
+                );
                 const activate = () => applySummaryFilter(key, filters);
                 card.onclick = activate;
                 card.onkeydown = (event) => {
@@ -1081,21 +1264,34 @@
             function populateStatusFilter(preferred = "all") {
                 const select = $("status-filter"),
                     category = $("category-filter").value;
-                const sourceCases = Object.entries(state.cases).filter(([id, c]) =>
-                    !(state.features.cloud_mode && state.features.new_case_ids?.includes(id)) &&
-                    (category === "all" || c.category === category));
+                const sourceCases = Object.entries(state.cases).filter(
+                    ([id, c]) =>
+                        !(
+                            state.features.cloud_mode &&
+                            state.features.new_case_ids?.includes(id)
+                        ) &&
+                        (category === "all" || c.category === category),
+                );
                 const appendAvailableOptions = (group, options) => {
                     for (const [value, label] of options) {
-                        const count = sourceCases.filter(([id, c]) => statusMatches(id, c, value)).length;
+                        const count = sourceCases.filter(([id, c]) =>
+                            statusMatches(id, c, value),
+                        ).length;
                         if (!count) continue;
-                        const optionNode = node("option", `${label} (${count})`);
+                        const optionNode = node(
+                            "option",
+                            `${label} (${count})`,
+                        );
                         optionNode.value = value;
                         group.append(optionNode);
                     }
                     if (group.children.length) select.append(group);
                 };
                 select.replaceChildren();
-                const all = node("option", `All statuses (${sourceCases.length})`);
+                const all = node(
+                    "option",
+                    `All statuses (${sourceCases.length})`,
+                );
                 all.value = "all";
                 select.append(all);
                 if (category === "all") {
@@ -1121,25 +1317,45 @@
                         ["NOT_APPLICABLE", "Awaiting comparison documents"],
                     ]);
                 }
-                for (const [workflowCategory, config] of Object.entries(CATEGORY_WORKFLOW)) {
+                for (const [workflowCategory, config] of Object.entries(
+                    CATEGORY_WORKFLOW,
+                )) {
                     if (category !== workflowCategory) continue;
                     const group = node("optgroup");
                     group.label = config.title;
-                    appendAvailableOptions(group, Object.entries(config.states).map(([workflowState, details]) =>
-                        [`WORKFLOW:${workflowCategory}:${workflowState}`, details[0]]));
+                    appendAvailableOptions(
+                        group,
+                        Object.entries(config.states).map(
+                            ([workflowState, details]) => [
+                                `WORKFLOW:${workflowCategory}:${workflowState}`,
+                                details[0],
+                            ],
+                        ),
+                    );
                 }
-                select.value = Array.from(select.options).some((optionNode) => optionNode.value === preferred)
-                    ? preferred : "all";
+                select.value = Array.from(select.options).some(
+                    (optionNode) => optionNode.value === preferred,
+                )
+                    ? preferred
+                    : "all";
             }
             function statusMatches(id, c, status) {
                 if (status === "all") return true;
-                const workflowParts = status.startsWith("WORKFLOW:") ? status.split(":") : null;
+                const workflowParts = status.startsWith("WORKFLOW:")
+                    ? status.split(":")
+                    : null;
                 if (workflowParts)
-                    return c.category === workflowParts[1] && categoryWorkflowState(c) === workflowParts[2];
+                    return (
+                        c.category === workflowParts[1] &&
+                        categoryWorkflowState(c) === workflowParts[2]
+                    );
                 if (status === "NEEDS_REVIEW") return unresolved(id, c);
                 return status === resultKey(c);
             }
-            function applySummaryFilter(key, { category = "all", status = "all", reason = null } = {}) {
+            function applySummaryFilter(
+                key,
+                { category = "all", status = "all", reason = null } = {},
+            ) {
                 state.summaryFilter = key;
                 state.reasonFilter = reason;
                 $("search").value = "";
@@ -1149,14 +1365,24 @@
                 $("date-from-field").classList.add("hidden");
                 $("date-to-field").classList.add("hidden");
                 renderDashboard();
-                $("case-table").closest("section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                $("case-table")
+                    .closest("section")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
             }
             function percentage(value) {
-                return Number.isFinite(value) ? (value * 100).toFixed(value === 1 ? 0 : 1) + "%" : "Unavailable";
+                return Number.isFinite(value)
+                    ? (value * 100).toFixed(value === 1 ? 0 : 1) + "%"
+                    : "Unavailable";
             }
             function caseTimestamp(c) {
                 const email = c.email || {};
-                for (const value of [email.date, email.timestamp, email.sent_at, email.received_at, c.updated_at]) {
+                for (const value of [
+                    email.date,
+                    email.timestamp,
+                    email.sent_at,
+                    email.received_at,
+                    c.updated_at,
+                ]) {
                     const time = Date.parse(value);
                     if (Number.isFinite(time)) return time;
                 }
@@ -1167,57 +1393,105 @@
                 if (selection === "all") return true;
                 const time = caseTimestamp(c);
                 if (time == null) return false;
-                const now = new Date(), start = new Date(now), end = new Date(now);
+                const now = new Date(),
+                    start = new Date(now),
+                    end = new Date(now);
                 start.setHours(0, 0, 0, 0);
                 end.setHours(23, 59, 59, 999);
                 if (selection === "7" || selection === "30")
                     start.setDate(start.getDate() - Number(selection) + 1);
                 if (selection === "custom") {
-                    const from = $("date-from").value, to = $("date-to").value;
-                    if (from) start.setTime(new Date(from + "T00:00:00").getTime());
+                    const from = $("date-from").value,
+                        to = $("date-to").value;
+                    if (from)
+                        start.setTime(new Date(from + "T00:00:00").getTime());
                     else start.setTime(-8640000000000000);
-                    if (to) end.setTime(new Date(to + "T23:59:59.999").getTime());
+                    if (to)
+                        end.setTime(new Date(to + "T23:59:59.999").getTime());
                     else end.setTime(8640000000000000);
                 }
                 return time >= start.getTime() && time <= end.getTime();
             }
             function renderCaseSummaries() {
                 const newIds = new Set(state.features.new_case_ids || []);
-                const cases = Object.entries(state.cases).filter(([id]) => !newIds.has(id));
+                const cases = Object.entries(state.cases).filter(
+                    ([id]) => !newIds.has(id),
+                );
                 const distribution = {
-                    "Verified - No mismatch": cases.filter(([, c]) => c.category === "BL_COMPARISON" && c.status === "OK").length,
-                    "Mismatch detected": cases.filter(([, c]) => c.status === "MISMATCH").length,
-                    "Human review required": cases.filter(([id, c]) => unresolved(id, c)).length,
+                    "Verified - No mismatch": cases.filter(
+                        ([, c]) =>
+                            c.category === "BL_COMPARISON" && c.status === "OK",
+                    ).length,
+                    "Mismatch detected": cases.filter(
+                        ([, c]) => c.status === "MISMATCH",
+                    ).length,
+                    "Human review required": cases.filter(([id, c]) =>
+                        unresolved(id, c),
+                    ).length,
                 };
                 const overviewFilters = {
-                    "Verified - No mismatch": { category: "BL_COMPARISON", status: "OK" },
+                    "Verified - No mismatch": {
+                        category: "BL_COMPARISON",
+                        status: "OK",
+                    },
                     "Mismatch detected": { status: "MISMATCH" },
                     "Human review required": { status: "NEEDS_REVIEW" },
                 };
-                $("case-distribution").replaceChildren(...Object.entries(distribution).map(([name, count]) =>
-                    filterMetric(name, count, `overview:${name}`, overviewFilters[name])));
-                const labels = { wrong_doc_type: "Wrong document", missing_attachment: "Missing attachment",
-                    unreadable: "Unreadable document", missing_value: "Missing value" };
+                $("case-distribution").replaceChildren(
+                    ...Object.entries(distribution).map(([name, count]) =>
+                        filterMetric(
+                            name,
+                            count,
+                            `overview:${name}`,
+                            overviewFilters[name],
+                        ),
+                    ),
+                );
+                const labels = {
+                    wrong_doc_type: "Wrong document",
+                    missing_attachment: "Missing attachment",
+                    unreadable: "Unreadable document",
+                    missing_value: "Missing value",
+                };
                 const reasons = {};
-                for (const [id, c] of cases) if (unresolved(id, c)) {
-                    const code = labels[c.review_reason] ? c.review_reason : "other";
-                    if (!reasons[code]) reasons[code] = { label: labels[code] || "Other", count: 0 };
-                    reasons[code].count += 1;
-                }
-                $("review-reasons").replaceChildren(...Object.entries(reasons).map(([code, item]) =>
-                    filterMetric(item.label, item.count, `reason:${code}`, { status: "NEEDS_REVIEW", reason: code })));
-                if (!Object.keys(reasons).length) $("review-reasons").append(metric("No active reviews", 0));
-                const workflowCards = Object.entries(CATEGORY_WORKFLOW).map(([category, config]) => {
-                    const categoryCases = cases.filter(([, c]) => c.category === category);
-                    const pending = categoryCases.filter(([, c]) =>
-                        categoryWorkflowState(c) !== "completed").length;
-                    return filterMetric(
-                        `${config.title} · ${pending} pending`,
-                        categoryCases.length,
-                        `category:${category}`,
-                        { category },
-                    );
-                });
+                for (const [id, c] of cases)
+                    if (unresolved(id, c)) {
+                        const code = labels[c.review_reason]
+                            ? c.review_reason
+                            : "other";
+                        if (!reasons[code])
+                            reasons[code] = {
+                                label: labels[code] || "Other",
+                                count: 0,
+                            };
+                        reasons[code].count += 1;
+                    }
+                $("review-reasons").replaceChildren(
+                    ...Object.entries(reasons).map(([code, item]) =>
+                        filterMetric(item.label, item.count, `reason:${code}`, {
+                            status: "NEEDS_REVIEW",
+                            reason: code,
+                        }),
+                    ),
+                );
+                if (!Object.keys(reasons).length)
+                    $("review-reasons").append(metric("No active reviews", 0));
+                const workflowCards = Object.entries(CATEGORY_WORKFLOW).map(
+                    ([category, config]) => {
+                        const categoryCases = cases.filter(
+                            ([, c]) => c.category === category,
+                        );
+                        const pending = categoryCases.filter(
+                            ([, c]) => categoryWorkflowState(c) !== "completed",
+                        ).length;
+                        return filterMetric(
+                            `${config.title} · ${pending} pending`,
+                            categoryCases.length,
+                            `category:${category}`,
+                            { category },
+                        );
+                    },
+                );
                 $("category-workflows").replaceChildren(...workflowCards);
             }
             function visibleCases() {
@@ -1232,11 +1506,18 @@
                         return false;
                     const e = c.email || {};
                     const statusMatch = statusMatches(id, c, status);
-                    const reasonCode = ["wrong_doc_type", "missing_attachment", "unreadable", "missing_value"].includes(c.review_reason)
-                        ? c.review_reason : "other";
+                    const reasonCode = [
+                        "wrong_doc_type",
+                        "missing_attachment",
+                        "unreadable",
+                        "missing_value",
+                    ].includes(c.review_reason)
+                        ? c.review_reason
+                        : "other";
                     return (
                         statusMatch &&
-                        (!state.reasonFilter || state.reasonFilter === reasonCode) &&
+                        (!state.reasonFilter ||
+                            state.reasonFilter === reasonCode) &&
                         dateMatches(c) &&
                         (category === "all" || category === c.category) &&
                         [id, e.from, e.subject].some((v) =>
@@ -1267,12 +1548,27 @@
                 $("new-email-history").classList.toggle("hidden", !isCloud);
                 if (isCloud) {
                     $("new-email-count").textContent =
-                        newIds.length + (newIds.length === 1 ? " submission" : " submissions");
+                        newIds.length +
+                        (newIds.length === 1 ? " submission" : " submissions");
                     const historyRows = newIds
-                        .filter((id) => state.cases[id] && dateMatches(state.cases[id]))
-                        .sort((a, b) =>
-                            (Date.parse(latestUpdate(state.cases[b], state.decisions[b])) || 0) -
-                            (Date.parse(latestUpdate(state.cases[a], state.decisions[a])) || 0),
+                        .filter(
+                            (id) =>
+                                state.cases[id] && dateMatches(state.cases[id]),
+                        )
+                        .sort(
+                            (a, b) =>
+                                (Date.parse(
+                                    latestUpdate(
+                                        state.cases[b],
+                                        state.decisions[b],
+                                    ),
+                                ) || 0) -
+                                (Date.parse(
+                                    latestUpdate(
+                                        state.cases[a],
+                                        state.decisions[a],
+                                    ),
+                                ) || 0),
                         )
                         .map((id) => {
                             const c = state.cases[id];
@@ -1285,19 +1581,60 @@
                             row.append(
                                 add(
                                     node("td"),
-                                    node("span", c.email?.subject || "No subject", "subject"),
-                                    node("div", `${c.email?.from || "Unknown sender"} · ${id}`, "secondary-text"),
+                                    node(
+                                        "span",
+                                        c.email?.subject || "No subject",
+                                        "subject",
+                                    ),
+                                    node(
+                                        "div",
+                                        `${c.email?.from || "Unknown sender"} · ${id}`,
+                                        "secondary-text",
+                                    ),
                                 ),
-                                add(node("td"), node("span", LABEL[c.category] || c.category, "badge " + c.category)),
-                                add(node("td"), node("span", resultLabel(c), "badge " + resultKey(c))),
-                                node("td", String(c.email?.attachments?.length || 0)),
-                                node("td", shortDate(latestUpdate(c, state.decisions[id]))),
-                                add(node("td"), button("View", () => openCase(id), "small-btn")),
+                                add(
+                                    node("td"),
+                                    node(
+                                        "span",
+                                        LABEL[c.category] || c.category,
+                                        "badge " + c.category,
+                                    ),
+                                ),
+                                add(
+                                    node("td"),
+                                    node(
+                                        "span",
+                                        resultLabel(c),
+                                        "badge " + resultKey(c),
+                                    ),
+                                ),
+                                node(
+                                    "td",
+                                    String(c.email?.attachments?.length || 0),
+                                ),
+                                node(
+                                    "td",
+                                    shortDate(
+                                        latestUpdate(c, state.decisions[id]),
+                                    ),
+                                ),
+                                add(
+                                    node("td"),
+                                    button(
+                                        "View",
+                                        () => openCase(id),
+                                        "small-btn",
+                                    ),
+                                ),
                             );
                             return row;
                         });
                     if (!historyRows.length) {
-                        const cell = node("td", "No new emails submitted yet.", "muted");
+                        const cell = node(
+                            "td",
+                            "No new emails submitted yet.",
+                            "muted",
+                        );
                         cell.colSpan = 6;
                         historyRows.push(add(node("tr"), cell));
                     }
@@ -1305,17 +1642,49 @@
                 }
                 const verified = state.features.verified_performance;
                 const overviewMetrics = [
-                    filterMetric("Total Emails", m.total || 0, "summary:total", {}),
-                    filterMetric("Document Checks", m.comparison_requests || 0, "summary:checks", { category: "BL_COMPARISON" }),
-                    filterMetric("Mismatches Detected", m.mismatches || 0, "summary:mismatch", { status: "MISMATCH" }),
-                    filterMetric("Human Review Required", m.human_review || 0, "summary:review", { status: "NEEDS_REVIEW" }),
+                    filterMetric(
+                        "Total Emails",
+                        m.total || 0,
+                        "summary:total",
+                        {},
+                    ),
+                    filterMetric(
+                        "Document Checks",
+                        m.comparison_requests || 0,
+                        "summary:checks",
+                        { category: "BL_COMPARISON" },
+                    ),
+                    filterMetric(
+                        "Mismatches Detected",
+                        m.mismatches || 0,
+                        "summary:mismatch",
+                        { status: "MISMATCH" },
+                    ),
+                    filterMetric(
+                        "Human Review Required",
+                        m.human_review || 0,
+                        "summary:review",
+                        { status: "NEEDS_REVIEW" },
+                    ),
                 ];
                 if (verified)
                     overviewMetrics.push(
-                        metric("Review Detection", `${verified.expected_reviews - verified.missed_reviews} / ${verified.expected_reviews}`),
-                        metric("Field Coverage", percentage(m.field_extraction_coverage)),
+                        metric(
+                            "Review Detection",
+                            `${verified.expected_reviews - verified.missed_reviews} / ${verified.expected_reviews}`,
+                        ),
+                        metric(
+                            "Field Coverage",
+                            percentage(m.field_extraction_coverage),
+                        ),
                     );
-                else overviewMetrics.push(metric("Field Coverage", percentage(m.field_extraction_coverage)));
+                else
+                    overviewMetrics.push(
+                        metric(
+                            "Field Coverage",
+                            percentage(m.field_extraction_coverage),
+                        ),
+                    );
                 $("metrics").replaceChildren(...overviewMetrics);
                 $("performance-note").textContent = verified
                     ? `${verified.dataset}; verified ${verified.verified_at}. ${verified.missed_reviews} expected reviews missed. Classification accuracy and mismatch precision/recall were ${percentage(verified.classification_accuracy)} on this validation set. These results are dataset-specific evidence, not guaranteed performance on unseen production data. Coverage measures whether required values were found, not whether every extracted value is accurate.`
@@ -1352,13 +1721,16 @@
                                     "secondary-text",
                                 ),
                             );
-                        const action = c.category !== "BL_COMPARISON"
-                            ? resultKey(c) === "CATEGORY_COMPLETED" ? "View" : "Handle"
-                            : c.status === "PROCESSING_FAILED"
-                                ? "Retry"
-                                : unresolved(id, c)
-                                  ? "Review"
-                                  : "View";
+                        const action =
+                            c.category !== "BL_COMPARISON"
+                                ? resultKey(c) === "CATEGORY_COMPLETED"
+                                    ? "View"
+                                    : "Handle"
+                                : c.status === "PROCESSING_FAILED"
+                                  ? "Retry"
+                                  : unresolved(id, c)
+                                    ? "Review"
+                                    : "View";
                         const actionButton = button(
                             action,
                             (event) => {
@@ -1375,7 +1747,11 @@
                                     e.subject || "No subject",
                                     "subject",
                                 ),
-                                node("div", `${e.from || "Unknown sender"} · ${id}`, "secondary-text"),
+                                node(
+                                    "div",
+                                    `${e.from || "Unknown sender"} · ${id}`,
+                                    "secondary-text",
+                                ),
                             ),
                             add(
                                 node("td"),
@@ -1580,22 +1956,39 @@
                 const summary = add(
                     node("dl"),
                     summaryMeta("Sender", e.from),
-                    summaryMeta("Classification", LABEL[c.category] || c.category),
-                    summaryMeta("Updated", shortDate(latestUpdate(c, state.decisions[id]))),
+                    summaryMeta(
+                        "Classification",
+                        LABEL[c.category] || c.category,
+                    ),
+                    summaryMeta(
+                        "Updated",
+                        shortDate(latestUpdate(c, state.decisions[id])),
+                    ),
                 );
                 if (c.category === "BL_COMPARISON")
                     summary.append(
-                        summaryMeta("Shipping Instruction", c.documents?.si?.split("/").pop() || "Unidentified"),
-                        summaryMeta("Draft BL", c.documents?.bl?.split("/").pop() || "Unidentified"),
+                        summaryMeta(
+                            "Shipping Instruction",
+                            c.documents?.si?.split("/").pop() || "Unidentified",
+                        ),
+                        summaryMeta(
+                            "Draft BL",
+                            c.documents?.bl?.split("/").pop() || "Unidentified",
+                        ),
                     );
                 else summary.append(summaryMeta("Workflow", resultLabel(c)));
                 box.append(summary);
                 head.append(box);
                 area.append(head);
                 renderCaseManagement(c, area);
-                if (c.category !== "BL_COMPARISON") renderCategoryWorkflow(c, area);
+                if (c.category !== "BL_COMPARISON")
+                    renderCategoryWorkflow(c, area);
                 renderProcessingMethod(c, area);
-                if (c.category === "BL_COMPARISON" && window.SPARK_MODE && state.features.ai_enabled)
+                if (
+                    c.category === "BL_COMPARISON" &&
+                    window.SPARK_MODE &&
+                    state.features.ai_enabled
+                )
                     area.append(
                         add(
                             section("Reanalyze documents"),
@@ -1623,26 +2016,49 @@
                 renderSource(c, e, area);
             }
             function caseReport(c) {
-                const e = c.email || {}, decisionRecord = state.decisions[c.email_id] || {};
+                const e = c.email || {},
+                    decisionRecord = state.decisions[c.email_id] || {};
                 const lines = [
-                    "SEAL Verification Report", `Case: ${c.email_id}`, `Subject: ${e.subject || ""}`,
-                    `Category: ${LABEL[c.category] || c.category}`, `Result: ${resultLabel(c)}`,
-                    `Updated: ${latestUpdate(c, decisionRecord) || ""}`, "",
+                    "SEAL Verification Report",
+                    `Case: ${c.email_id}`,
+                    `Subject: ${e.subject || ""}`,
+                    `Category: ${LABEL[c.category] || c.category}`,
+                    `Result: ${resultLabel(c)}`,
+                    `Updated: ${latestUpdate(c, decisionRecord) || ""}`,
+                    "",
                 ];
                 if (c.category === "BL_COMPARISON") {
                     lines.push("Seven-field comparison");
                     for (const field of FIELDS) {
-                        const si = c.si_fields?.[field], bl = c.bl_fields?.[field];
-                        lines.push(`${prettyField(field)}: SI=${si?.raw_value ?? "Missing"} | Draft BL=${bl?.raw_value ?? "Missing"} | ${fieldResult(si, bl)[0]}`);
-                        for (const [role, value] of [["SI", si], ["Draft BL", bl]]) if (value)
-                            lines.push(`  ${role} evidence: document=${value.source || c.documents?.[role === "SI" ? "si" : "bl"] || "Unknown"}; page=${value.page || "N/A"}; method=${value.method || "native"}; text=${value.source_text || value.raw_value || "Unavailable"}`);
+                        const si = c.si_fields?.[field],
+                            bl = c.bl_fields?.[field];
+                        lines.push(
+                            `${prettyField(field)}: SI=${si?.raw_value ?? "Missing"} | Draft BL=${bl?.raw_value ?? "Missing"} | ${fieldResult(si, bl)[0]}`,
+                        );
+                        for (const [role, value] of [
+                            ["SI", si],
+                            ["Draft BL", bl],
+                        ])
+                            if (value)
+                                lines.push(
+                                    `  ${role} evidence: document=${value.source || c.documents?.[role === "SI" ? "si" : "bl"] || "Unknown"}; page=${value.page || "N/A"}; method=${value.method || "native"}; text=${value.source_text || value.raw_value || "Unavailable"}`,
+                                );
                     }
-                    lines.push("", `Discrepancies: ${(c.mismatches || []).length}`);
+                    lines.push(
+                        "",
+                        `Discrepancies: ${(c.mismatches || []).length}`,
+                    );
                 }
                 const assignment = decisionRecord.assignment || {};
-                lines.push(`Reviewer: ${assignment.reviewer || "Unassigned"}`, `Priority: ${assignment.priority || "Normal"}`, `Due: ${assignment.due || "Not set"}`);
+                lines.push(
+                    `Reviewer: ${assignment.reviewer || "Unassigned"}`,
+                    `Priority: ${assignment.priority || "Normal"}`,
+                    `Due: ${assignment.due || "Not set"}`,
+                );
                 if (decisionRecord.feedback)
-                    lines.push(`Feedback: ${decisionRecord.feedback.outcome}; cause=${decisionRecord.feedback.cause}; ${decisionRecord.feedback.comment || ""}`);
+                    lines.push(
+                        `Feedback: ${decisionRecord.feedback.outcome}; cause=${decisionRecord.feedback.cause}; ${decisionRecord.feedback.comment || ""}`,
+                    );
                 return lines.join("\n");
             }
             function downloadText(filename, text, type = "text/plain") {
@@ -1653,50 +2069,136 @@
                 setTimeout(() => URL.revokeObjectURL(link.href), 1000);
             }
             function renderCaseManagement(c, area) {
-                const saved = state.decisions[c.email_id] || {}, panel = section("Case management");
-                const assignment = saved.assignment || {}, assignmentRow = node("div", "", "toolbar");
-                const reviewer = node("input"), priority = node("select"), due = node("input");
-                reviewer.placeholder = "Reviewer name"; reviewer.value = assignment.reviewer || "";
+                const saved = state.decisions[c.email_id] || {},
+                    panel = section("Case management");
+                const assignment = saved.assignment || {},
+                    assignmentRow = node("div", "", "toolbar");
+                const reviewer = node("input"),
+                    priority = node("select"),
+                    due = node("input");
+                reviewer.placeholder = "Reviewer name";
+                reviewer.value = assignment.reviewer || "";
                 for (const value of ["low", "normal", "high", "urgent"]) {
-                    const optionNode = node("option", value[0].toUpperCase() + value.slice(1)); optionNode.value = value; priority.append(optionNode);
+                    const optionNode = node(
+                        "option",
+                        value[0].toUpperCase() + value.slice(1),
+                    );
+                    optionNode.value = value;
+                    priority.append(optionNode);
                 }
-                priority.value = assignment.priority || "normal"; due.type = "date"; due.value = assignment.due || "";
+                priority.value = assignment.priority || "normal";
+                due.type = "date";
+                due.value = assignment.due || "";
                 assignmentRow.append(
                     add(node("label", "Reviewer ", "filter-field"), reviewer),
                     add(node("label", "Priority ", "filter-field"), priority),
                     add(node("label", "Due date ", "filter-field"), due),
-                    button("Save assignment", () => decision(c.email_id, "update_assignment", { reviewer: reviewer.value, priority: priority.value, due: due.value }), "small-btn primary"),
+                    button(
+                        "Save assignment",
+                        () =>
+                            decision(c.email_id, "update_assignment", {
+                                reviewer: reviewer.value,
+                                priority: priority.value,
+                                due: due.value,
+                            }),
+                        "small-btn primary",
+                    ),
                 );
-                const feedback = saved.feedback || {}, feedbackRow = node("div", "", "toolbar"), outcome = node("select"), cause = node("select"), comment = node("input");
-                [["accepted", "Accepted"], ["corrected", "Corrected"]].forEach(([value, label]) => { const optionNode = node("option", label); optionNode.value = value; outcome.append(optionNode); });
-                [["none", "No issue"], ["classification", "Classification"], ["extraction", "Extraction"], ["comparison", "Comparison"], ["other", "Other"]].forEach(([value, label]) => { const optionNode = node("option", label); optionNode.value = value; cause.append(optionNode); });
-                outcome.value = feedback.outcome || "accepted"; cause.value = feedback.cause || "none"; comment.placeholder = "Optional feedback note"; comment.value = feedback.comment || "";
+                const feedback = saved.feedback || {},
+                    feedbackRow = node("div", "", "toolbar"),
+                    outcome = node("select"),
+                    cause = node("select"),
+                    comment = node("input");
+                [
+                    ["accepted", "Accepted"],
+                    ["corrected", "Corrected"],
+                ].forEach(([value, label]) => {
+                    const optionNode = node("option", label);
+                    optionNode.value = value;
+                    outcome.append(optionNode);
+                });
+                [
+                    ["none", "No issue"],
+                    ["classification", "Classification"],
+                    ["extraction", "Extraction"],
+                    ["comparison", "Comparison"],
+                    ["other", "Other"],
+                ].forEach(([value, label]) => {
+                    const optionNode = node("option", label);
+                    optionNode.value = value;
+                    cause.append(optionNode);
+                });
+                outcome.value = feedback.outcome || "accepted";
+                cause.value = feedback.cause || "none";
+                comment.placeholder = "Optional feedback note";
+                comment.value = feedback.comment || "";
                 feedbackRow.append(
                     add(node("label", "Result ", "filter-field"), outcome),
                     add(node("label", "Issue source ", "filter-field"), cause),
                     add(node("label", "Comment ", "filter-field"), comment),
-                    button("Save feedback", () => decision(c.email_id, "reviewer_feedback", { outcome: outcome.value, cause: cause.value, comment: comment.value }), "small-btn"),
+                    button(
+                        "Save feedback",
+                        () =>
+                            decision(c.email_id, "reviewer_feedback", {
+                                outcome: outcome.value,
+                                cause: cause.value,
+                                comment: comment.value,
+                            }),
+                        "small-btn",
+                    ),
                 );
                 panel.append(
-                    node("h3", "Assignment"), assignmentRow,
-                    node("h3", "Reviewer feedback"), feedbackRow,
-                    add(node("div", "", "actions"), button("Download verification report", () => downloadText(`SEAL-${c.email_id}-report.txt`, caseReport(c)), "primary")),
+                    node("h3", "Assignment"),
+                    assignmentRow,
+                    node("h3", "Reviewer feedback"),
+                    feedbackRow,
+                    add(
+                        node("div", "", "actions"),
+                        button(
+                            "Download verification report",
+                            () =>
+                                downloadText(
+                                    `SEAL-${c.email_id}-report.txt`,
+                                    caseReport(c),
+                                ),
+                            "primary",
+                        ),
+                    ),
                 );
                 const events = saved.activity || [];
                 const baseline = [
                     `Classified as ${LABEL[c.category] || c.category}`,
-                    c.category === "BL_COMPARISON" ? "Documents identified and fields extracted" : "Routed to category workflow",
+                    c.category === "BL_COMPARISON"
+                        ? "Documents identified and fields extracted"
+                        : "Routed to category workflow",
                     `Result recorded: ${resultLabel(c)}`,
                 ];
-                const history = node("details"); history.append(node("summary", `Activity history (${baseline.length + events.length})`));
+                const history = node("details");
+                history.append(
+                    node(
+                        "summary",
+                        `Activity history (${baseline.length + events.length})`,
+                    ),
+                );
                 const list = node("ol", "", "muted");
                 for (const event of [...events].reverse())
-                    list.append(node("li", `${shortDate(event.at)} · ${String(event.action || "update").replaceAll("_", " ")}${event.note ? " · " + event.note : ""}`));
-                for (const event of baseline.reverse()) list.append(node("li", `${shortDate(c.updated_at)} · ${event}`));
-                history.append(list); panel.append(history); area.append(panel);
+                    list.append(
+                        node(
+                            "li",
+                            `${shortDate(event.at)} · ${String(event.action || "update").replaceAll("_", " ")}${event.note ? " · " + event.note : ""}`,
+                        ),
+                    );
+                for (const event of baseline.reverse())
+                    list.append(
+                        node("li", `${shortDate(c.updated_at)} · ${event}`),
+                    );
+                history.append(list);
+                panel.append(history);
+                area.append(panel);
             }
             function renderCategoryWorkflow(c, area) {
-                const { config, workflowState, label, guidance } = categoryWorkflowInfo(c),
+                const { config, workflowState, label, guidance } =
+                        categoryWorkflowInfo(c),
                     panel = section(config.title),
                     stateRow = node("div", "", "toolbar"),
                     stateSelect = node("select"),
@@ -1709,10 +2211,18 @@
                 }
                 stateSelect.value = workflowState;
                 stateRow.append(
-                    add(node("label", "Workflow status ", "filter-field"), stateSelect),
-                    button("Save workflow status", () => decision(c.email_id, "update_category_workflow", {
-                        workflow_state: stateSelect.value,
-                    }), "small-btn primary"),
+                    add(
+                        node("label", "Workflow status ", "filter-field"),
+                        stateSelect,
+                    ),
+                    button(
+                        "Save workflow status",
+                        () =>
+                            decision(c.email_id, "update_category_workflow", {
+                                workflow_state: stateSelect.value,
+                            }),
+                        "small-btn primary",
+                    ),
                 );
                 panel.append(
                     node("p", label, "notice"),
@@ -1720,7 +2230,11 @@
                     stateRow,
                 );
                 if (c.category !== "SPAM")
-                    actions.append(button("Prepare response draft", () => showCategoryDraft(c, panel)));
+                    actions.append(
+                        button("Prepare response draft", () =>
+                            showCategoryDraft(c, panel),
+                        ),
+                    );
                 actions.append(button("View full email", openEmailSource));
                 panel.append(actions);
                 area.append(panel);
@@ -1750,12 +2264,25 @@
                     list = node("ul", "", "muted");
                 if (c.category !== "BL_COMPARISON") {
                     list.append(
-                        node("li", "Email classification: deterministic rules with validated Gemini fallback when intent is uncertain."),
-                        node("li", `Workflow routing: ${LABEL[c.category] || c.category} queue.`),
-                        node("li", "Final handling: a reviewer reads, responds, routes, or confirms the message and records completion."),
+                        node(
+                            "li",
+                            "Email classification: deterministic rules with validated Gemini fallback when intent is uncertain.",
+                        ),
+                        node(
+                            "li",
+                            `Workflow routing: ${LABEL[c.category] || c.category} queue.`,
+                        ),
+                        node(
+                            "li",
+                            "Final handling: a reviewer reads, responds, routes, or confirms the message and records completion.",
+                        ),
                     );
                     panel.append(
-                        node("p", "Email → Classification → Category workflow → Reviewer action → Completed", "notice"),
+                        node(
+                            "p",
+                            "Email → Classification → Category workflow → Reviewer action → Completed",
+                            "notice",
+                        ),
                         list,
                     );
                     area.append(panel);
@@ -1777,7 +2304,13 @@
                     list,
                 );
                 if (c.status === "NEEDS_REVIEW")
-                    panel.append(node("p", "This case stopped for human review instead of guessing from uncertain evidence.", "muted"));
+                    panel.append(
+                        node(
+                            "p",
+                            "This case stopped for human review instead of guessing from uncertain evidence.",
+                            "muted",
+                        ),
+                    );
                 area.append(panel);
             }
             function fieldResult(a, b) {
@@ -1898,7 +2431,13 @@
                         add(
                             node("td", label, "result " + kind),
                             ...(kind === "mismatch"
-                                ? [node("div", "View source evidence", "secondary-text")]
+                                ? [
+                                      node(
+                                          "div",
+                                          "View source evidence",
+                                          "secondary-text",
+                                      ),
+                                  ]
                                 : []),
                         ),
                     );
@@ -2129,7 +2668,9 @@
                         ),
                     );
                     actions.append(
-                        button("View source evidence", () => openSource(c, "si")),
+                        button("View source evidence", () =>
+                            openSource(c, "si"),
+                        ),
                         button("Retry extraction", () => retry(c.email_id)),
                         button("Resolve case", () =>
                             decision(c.email_id, "resolve"),
@@ -2195,7 +2736,9 @@
                 panel.append(row);
                 if (fieldData)
                     actions.append(
-                        button("View source evidence", () => openSource(c, roleName)),
+                        button("View source evidence", () =>
+                            openSource(c, roleName),
+                        ),
                         button(
                             "Confirm selected value",
                             () =>
@@ -2331,10 +2874,13 @@
                             frame.title = path;
                             slot.replaceChildren(select, frame);
                         } else {
-                            const doc = await request(apiPath("document", id, index));
+                            const doc = await request(
+                                apiPath("document", id, index),
+                            );
                             slot.replaceChildren(select);
                             slot.append(
-                                doc.text && doc.text !== "Source text is unavailable."
+                                doc.text &&
+                                    doc.text !== "Source text is unavailable."
                                     ? node("pre", doc.text, "doc-text")
                                     : node(
                                           "p",
@@ -2464,10 +3010,17 @@
             $("back-button").onclick = showDashboard;
             $("verify-documents").onclick = () => {
                 showDashboard();
-                setTimeout(() => $("new-email-form-slot").scrollIntoView({ behavior: "smooth", block: "start" }));
+                setTimeout(() =>
+                    $("new-email-form-slot").scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                    }),
+                );
             };
             $("review-exceptions").onclick = () =>
-                applySummaryFilter("summary:review", { status: "NEEDS_REVIEW" });
+                applySummaryFilter("summary:review", {
+                    status: "NEEDS_REVIEW",
+                });
             $("search").oninput = renderAfterManualFilter;
             $("category-filter").onchange = () => {
                 populateStatusFilter();

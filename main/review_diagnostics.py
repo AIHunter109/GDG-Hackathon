@@ -10,16 +10,27 @@ def _document_type(case):
     attachments = case.get("email", {}).get("attachments", [])
     if not attachments:
         return "no_attachment"
-    suffixes = {Path(path).suffix.lower().lstrip(".") or "unknown" for path in attachments}
+    suffixes = {
+        Path(path).suffix.lower().lstrip(".") or "unknown" for path in attachments
+    }
     return "+".join(sorted(suffixes))
 
 
 def build_review_diagnostics(submission, evidence, ground_truth=None):
-    reviewed = {email_id for email_id, record in submission.items()
-                if record.get("status") == "NEEDS_REVIEW"}
-    expected = ({email_id for email_id, record in ground_truth.items()
-                 if record.get("status") == "NEEDS_REVIEW"}
-                if ground_truth is not None else None)
+    reviewed = {
+        email_id
+        for email_id, record in submission.items()
+        if record.get("status") == "NEEDS_REVIEW"
+    }
+    expected = (
+        {
+            email_id
+            for email_id, record in ground_truth.items()
+            if record.get("status") == "NEEDS_REVIEW"
+        }
+        if ground_truth is not None
+        else None
+    )
     selected = reviewed - expected if expected is not None else reviewed
 
     by_reason = Counter()
@@ -32,7 +43,9 @@ def build_review_diagnostics(submission, evidence, ground_truth=None):
         by_reason[record.get("review_reason") or "unspecified"] += 1
         by_internal_reason[case.get("internal_reason") or "unspecified"] += 1
         by_document_type[_document_type(case)] += 1
-        for field in set(case.get("missing_fields", [])) | set(case.get("uncertain_fields", [])):
+        for field in set(case.get("missing_fields", [])) | set(
+            case.get("uncertain_fields", [])
+        ):
             by_field[field] += 1
 
     report = {
@@ -45,8 +58,11 @@ def build_review_diagnostics(submission, evidence, ground_truth=None):
         "by_field": dict(by_field.most_common()),
     }
     if expected is not None:
-        report.update(expected_reviews=len(expected), false_reviews=len(reviewed - expected),
-                      missed_reviews=len(expected - reviewed))
+        report.update(
+            expected_reviews=len(expected),
+            false_reviews=len(reviewed - expected),
+            missed_reviews=len(expected - reviewed),
+        )
     return report
 
 
@@ -59,7 +75,11 @@ def main():
     args = parser.parse_args()
     submission = json.loads(args.submission.read_text(encoding="utf-8"))
     evidence = json.loads(args.evidence.read_text(encoding="utf-8"))
-    truth = json.loads(args.ground_truth.read_text(encoding="utf-8")) if args.ground_truth else None
+    truth = (
+        json.loads(args.ground_truth.read_text(encoding="utf-8"))
+        if args.ground_truth
+        else None
+    )
     report = build_review_diagnostics(submission, evidence, truth)
     rendered = json.dumps(report, indent=2)
     if args.output:

@@ -7,7 +7,6 @@ import zlib
 
 from ai_service import AIService
 
-
 GLYPHS = {
     " ": ("00000",) * 7,
     "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
@@ -58,9 +57,7 @@ def synthetic_scanned_pdf():
         ).encode()
         + image
         + b"\nendstream",
-        f"<< /Length {len(content)} >>\nstream\n".encode()
-        + content
-        + b"endstream",
+        f"<< /Length {len(content)} >>\nstream\n".encode() + content + b"endstream",
     ]
     output = io.BytesIO()
     output.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
@@ -89,7 +86,10 @@ def main():
         "attachments": [],
     }
     classification = ai.classify_email(email)
-    print("Gemini classification:", classification.get("category") if classification else None)
+    print(
+        "Gemini classification:",
+        classification.get("category") if classification else None,
+    )
     pdf = synthetic_scanned_pdf()
     from pypdf import PdfReader
 
