@@ -101,7 +101,7 @@ export function applyReview(caseRecord, action, payload = {}) {
     corrections.field = field;
     return { caseRecord: recompare(result), corrections };
   }
-  if (!["confirm", "resolve"].includes(action)) throw new Error("Unknown reviewer action");
+  if (!["confirm", "resolve", "reopen"].includes(action)) throw new Error("Unknown reviewer action");
   return { caseRecord: result, corrections };
 }
 

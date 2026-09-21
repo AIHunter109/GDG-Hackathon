@@ -128,6 +128,40 @@ class WebWorkflowTests(unittest.TestCase):
             server.server_close()
             Handler.repository = previous
 
+    def test_completed_review_can_be_reopened(self):
+        previous = Handler.repository
+        Handler.repository = MemoryRepository()
+        Handler.repository.case["status"] = "NEEDS_REVIEW"
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{server.server_port}"
+        try:
+            def post(action):
+                request = urllib.request.Request(
+                    base + "/api/decision/email_demo",
+                    json.dumps({"action": action}).encode(),
+                    {"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(request) as response:
+                    return json.load(response)
+
+            self.assertEqual(post("resolve")["decision"]["action"], "resolve")
+            with urllib.request.urlopen(base + "/api/cases") as response:
+                self.assertEqual(json.load(response)["metrics"]["human_review"], 0)
+            reopened = post("reopen")
+            self.assertEqual(reopened["decision"]["action"], "reopen")
+            self.assertEqual(reopened["case"]["status"], "NEEDS_REVIEW")
+            with urllib.request.urlopen(base + "/api/cases") as response:
+                self.assertEqual(json.load(response)["metrics"]["human_review"], 1)
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                post("reopen")
+            self.assertEqual(error.exception.code, 400)
+            error.exception.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            Handler.repository = previous
+
 
 if __name__ == "__main__":
     unittest.main()

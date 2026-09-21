@@ -578,6 +578,7 @@
                         </table>
                     </div>
                 </section>
+                <div id="new-email-form-slot"></div>
                 <section id="new-email-history" class="card hidden">
                     <div class="card-head">
                         <h2>New email history</h2>
@@ -601,7 +602,6 @@
                         </table>
                     </div>
                 </section>
-                <div id="new-email-form-slot"></div>
             </main>
             <main id="case-view" class="hidden">
                 <button id="back-button" class="back">← Dashboard</button>
@@ -1201,13 +1201,13 @@
                             ),
                         ),
                     );
+                if (c.category === "BL_COMPARISON") renderReview(c, area);
                 if (
                     c.category === "BL_COMPARISON" &&
                     c.status !== "PROCESSING" &&
                     (c.si_fields || c.bl_fields)
                 )
                     renderComparison(c, area);
-                if (c.category === "BL_COMPARISON") renderReview(c, area);
                 renderSource(c, e, area);
             }
             function fieldResult(a, b) {
@@ -1469,6 +1469,14 @@
                             "p",
                             "Review completed by an operator. The original evidence remains available below.",
                             "notice",
+                        ),
+                        add(
+                            node("div", "", "actions"),
+                            button(
+                                "Undo review completion",
+                                () => decision(c.email_id, "reopen"),
+                                "primary",
+                            ),
                         ),
                     );
                     area.append(panel);

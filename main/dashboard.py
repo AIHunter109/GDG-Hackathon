@@ -144,6 +144,9 @@ class Handler(BaseHTTPRequestHandler):
                     case, record = confirm_value(case, role, field)
                     store.save_case(email_id, case, record)
                     corrections = {"role": role, "field": field}
+                elif choice == "reopen":
+                    if case.get("status") != "NEEDS_REVIEW" or store.list_decisions().get(email_id, {}).get("action") != "resolve":
+                        raise ValueError("Only a completed human review can be reopened")
                 elif choice not in {"confirm", "resolve"}:
                     raise ValueError("Unknown reviewer action")
                 decision = store.save_decision(email_id, choice, payload.get("note", ""), corrections)

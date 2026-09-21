@@ -33,6 +33,16 @@ test("reviewer correction recomputes the decision", () => {
   assert.equal(original.status, "NEEDS_REVIEW");
 });
 
+test("reopening a completed review restores the pending review count", () => {
+  const review = syntheticCases().demo_review;
+  const resolved = { case: review.case, decision: { action: "resolve" } };
+  assert.equal(metricsFor({ demo_review: resolved }).human_review, 0);
+  const reopened = applyReview(review.case, "reopen");
+  assert.equal(reopened.caseRecord.status, "NEEDS_REVIEW");
+  assert.equal(metricsFor({ demo_review: { case: reopened.caseRecord,
+    decision: { action: "reopen" } } }).human_review, 1);
+});
+
 test("dashboard document-check totals exclude non-comparison email", () => {
   const records = syntheticCases();
   records.general = { case: { email_id: "general", category: "GENERAL", status: "OK" }, decision: null };
