@@ -108,11 +108,6 @@
                 color: #597384;
                 font-size: 12px;
             }
-            .metric:hover,
-            .metric.active {
-                border-color: #0a7180;
-                background: #edf8f9;
-            }
             .card-head {
                 display: flex;
                 align-items: center;
@@ -124,7 +119,6 @@
                 margin: 0;
             }
             .toolbar,
-            .quick-filters,
             .actions {
                 display: flex;
                 gap: 8px;
@@ -134,8 +128,12 @@
             .toolbar {
                 margin: 0 0 12px;
             }
-            .quick-filters {
-                margin: 0 0 16px;
+            .filter-field {
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                color: #526f7f;
+                font-weight: 650;
             }
             input,
             select,
@@ -151,7 +149,6 @@
                 flex: 1;
                 min-width: 230px;
             }
-            .chip,
             .small-btn,
             .actions button,
             .back {
@@ -162,7 +159,6 @@
                 color: #245064;
                 font-weight: 650;
             }
-            .chip.active,
             .small-btn.primary,
             .actions button.primary {
                 background: #0b6976;
@@ -521,81 +517,50 @@
                 </div>
             </header>
             <main id="dashboard-view">
+                <section id="spark-auth" class="card hidden">
+                    <p id="spark-status" class="notice">Connecting to Firebase…</p>
+                </section>
                 <div
                     id="metrics"
                     class="metrics"
-                    aria-label="Case summary filters"
+                    aria-label="Email summary"
                 ></div>
-                <section id="new-email-history" class="card hidden">
-                    <div class="card-head">
-                        <h2>New email history</h2>
-                        <span id="new-email-count" class="muted"></span>
-                    </div>
-                    <p class="muted">Emails submitted in this app appear here. The original 520 emails remain in the table below.</p>
-                    <div class="table-scroll">
-                        <table class="master">
-                            <thead>
-                                <tr>
-                                    <th>Email</th>
-                                    <th>Sender</th>
-                                    <th>Subject</th>
-                                    <th>Verification status</th>
-                                    <th>Attachments</th>
-                                    <th>Updated</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="new-email-table"></tbody>
-                        </table>
-                    </div>
-                </section>
                 <section class="card">
                     <div class="card-head">
-                        <h2 id="case-table-heading">Cases</h2>
+                        <h2>Emails</h2>
                         <span id="case-count" class="muted"></span>
                     </div>
-                    <p class="muted">Attachment count shows files listed on the source email. Zero means no files were attached; two usually means an SI and a draft BL.</p>
-                    <div
-                        id="quick-filters"
-                        class="quick-filters"
-                        aria-label="Quick filters"
-                    ></div>
-                    <div class="toolbar">
+                    <div class="toolbar" aria-label="Email filters">
                         <input
                             id="search"
-                            placeholder="Search case, sender, or subject"
-                            aria-label="Search cases"
-                        /><select
-                            id="category-filter"
-                            aria-label="Filter category"
-                        >
-                            <option value="all">All categories</option>
-                            <option value="BL_COMPARISON">
-                                Document comparison
-                            </option>
-                            <option value="SI_REQUEST">SI request</option>
-                            <option value="INVOICE_QUERY">Invoice query</option>
-                            <option value="GENERAL">General</option>
-                            <option value="SPAM">Spam</option></select
-                        ><select
-                            id="status-filter"
-                            aria-label="Filter verification status"
-                        >
-                            <option value="all">All statuses</option>
-                            <option value="PROCESSING">Processing</option>
-                            <option value="OK">No mismatch detected</option>
-                            <option value="MISMATCH">Mismatch detected</option>
-                            <option value="NEEDS_REVIEW">
-                                Human review required
-                            </option>
-                            <option value="PROCESSING_FAILED">
-                                Processing failed
-                            </option>
-                            <option value="NOT_APPLICABLE">
-                                Not applicable
-                            </option>
-                        </select>
+                            placeholder="Search email, sender, or subject"
+                            aria-label="Search emails"
+                        />
+                        <label class="filter-field">Category
+                            <select id="category-filter">
+                                <option value="all">All categories</option>
+                                <option value="BL_COMPARISON">Document comparison</option>
+                                <option value="SI_REQUEST">SI request</option>
+                                <option value="INVOICE_QUERY">Invoice query</option>
+                                <option value="GENERAL">General</option>
+                                <option value="SPAM">Spam</option>
+                            </select>
+                        </label>
+                        <label class="filter-field">Status
+                            <select id="status-filter">
+                                <option value="all">All statuses</option>
+                                <option value="PROCESSING">Processing</option>
+                                <option value="OK">No mismatch detected</option>
+                                <option value="MISMATCH">Mismatch detected</option>
+                                <option value="NEEDS_REVIEW">Human review required</option>
+                                <option value="RESOLVED_REVIEW">Human review completed</option>
+                                <option value="PROCESSING_FAILED">Processing failed</option>
+                                <option value="NOT_APPLICABLE">Not applicable</option>
+                            </select>
+                        </label>
+                        <button id="clear-filters" class="small-btn" type="button">Clear filters</button>
                     </div>
+                    <p class="muted">Attachments counts files listed on the source email. Zero means no files were attached; two usually means an SI and a draft BL.</p>
                     <div class="table-scroll">
                         <table class="master">
                             <thead>
@@ -613,6 +578,30 @@
                         </table>
                     </div>
                 </section>
+                <section id="new-email-history" class="card hidden">
+                    <div class="card-head">
+                        <h2>New email history</h2>
+                        <span id="new-email-count" class="muted"></span>
+                    </div>
+                    <p class="muted">Emails submitted in this app appear here.</p>
+                    <div class="table-scroll">
+                        <table class="master">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Sender</th>
+                                    <th>Subject</th>
+                                    <th>Verification status</th>
+                                    <th>Attachments</th>
+                                    <th>Updated</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="new-email-table"></tbody>
+                        </table>
+                    </div>
+                </section>
+                <div id="new-email-form-slot"></div>
             </main>
             <main id="case-view" class="hidden">
                 <button id="back-button" class="back">← Dashboard</button>
@@ -642,15 +631,6 @@
                 PROCESSING: "Processing",
                 NOT_APPLICABLE: "Not applicable",
             };
-            const FILTERS = [
-                ["all", "All"],
-                ["PROCESSING", "Processing"],
-                ["OK", "No mismatch"],
-                ["MISMATCH", "Mismatch"],
-                ["NEEDS_REVIEW", "Human review"],
-                ["NOT_APPLICABLE", "Other emails"],
-                ["PROCESSING_FAILED", "Failed"],
-            ];
             const $ = (id) => document.getElementById(id);
             const node = (tag, text = "", className = "") => {
                 const x = document.createElement(tag);
@@ -682,7 +662,6 @@
                 page: "dashboard",
                 selected: null,
                 email: null,
-                filter: "all",
                 mismatch: 0,
             };
             async function request(url, body) {
@@ -856,28 +835,12 @@
                         : "Request a readable copy or review the attachment manually; retry after the source is updated.";
                 return "Review the source evidence, then confirm or correct the value.";
             }
-            function metric(title, value, filter) {
-                const item = add(
-                    node(
-                        "button",
-                        "",
-                        "metric" + (state.filter === filter ? " active" : ""),
-                    ),
+            function metric(title, value) {
+                return add(
+                    node("div", "", "metric"),
                     node("strong", String(value)),
                     node("span", title),
                 );
-                item.type = "button";
-                item.setAttribute(
-                    "aria-pressed",
-                    String(state.filter === filter),
-                );
-                item.onclick = () => setFilter(filter);
-                return item;
-            }
-            function setFilter(filter) {
-                state.filter = filter;
-                $("status-filter").value = "all";
-                renderDashboard();
             }
             function visibleCases() {
                 const search = $("search").value.toLowerCase(),
@@ -890,20 +853,12 @@
                     )
                         return false;
                     const e = c.email || {},
-                        key = resultKey(c),
-                        filter = state.filter;
-                    const filterMatch =
-                        filter === "all" ||
-                        (filter === "comparison" &&
-                            c.category === "BL_COMPARISON") ||
-                        (filter === "NEEDS_REVIEW" && unresolved(id, c)) ||
-                        filter === key;
+                        key = resultKey(c);
                     const statusMatch =
                         status === "all" ||
                         (status === "NEEDS_REVIEW" && unresolved(id, c)) ||
                         status === key;
                     return (
-                        filterMatch &&
                         statusMatch &&
                         (category === "all" || category === c.category) &&
                         [id, e.from, e.subject].some((v) =>
@@ -919,9 +874,6 @@
                 const isCloud = Boolean(state.features.cloud_mode);
                 const newIds = state.features.new_case_ids || [];
                 $("new-email-history").classList.toggle("hidden", !isCloud);
-                $("case-table-heading").textContent = isCloud
-                    ? "Original emails"
-                    : "Cases";
                 if (isCloud) {
                     $("new-email-count").textContent =
                         newIds.length + (newIds.length === 1 ? " submission" : " submissions");
@@ -958,46 +910,16 @@
                     $("new-email-table").replaceChildren(...historyRows);
                 }
                 $("metrics").replaceChildren(
-                    metric("Total Emails", m.total || 0, "all"),
-                    metric(
-                        "Document Checks",
-                        m.comparison_requests || 0,
-                        "comparison",
-                    ),
-                    metric(
-                        "No Mismatch Detected",
-                        m.automatically_cleared || 0,
-                        "OK",
-                    ),
-                    metric("Mismatch Detected", m.mismatches || 0, "MISMATCH"),
-                    metric(
-                        "Human Review Required",
-                        m.human_review || 0,
-                        "NEEDS_REVIEW",
-                    ),
-                    metric("Processing", m.processing || 0, "PROCESSING"),
-                );
-                $("quick-filters").replaceChildren(
-                    ...FILTERS.map(([key, label]) => {
-                        const b = button(
-                            label,
-                            () => setFilter(key),
-                            "chip" + (state.filter === key ? " active" : ""),
-                        );
-                        b.setAttribute(
-                            "aria-pressed",
-                            String(state.filter === key),
-                        );
-                        return b;
-                    }),
+                    metric("Total Emails", m.total || 0),
+                    metric("Document Checks", m.comparison_requests || 0),
+                    metric("No Mismatch Detected", m.automatically_cleared || 0),
+                    metric("Mismatch Detected", m.mismatches || 0),
+                    metric("Human Review Required", m.human_review || 0),
+                    metric("Processing", m.processing || 0),
                 );
                 const entries = visibleCases();
-                const countDetails = state.features.cloud_mode
-                    ? " original emails"
-                    : "";
                 $("case-count").textContent =
-                    entries.length + " of " + (m.total || 0) +
-                    (isCloud ? countDetails : " cases");
+                    entries.length + " of " + (m.total || 0) + " emails";
                 $("case-table").replaceChildren(
                     ...entries.map(([id, c]) => {
                         const e = c.email || {},
@@ -1887,15 +1809,16 @@
                     state.metrics.processing =
                         (state.metrics.processing || 0) + 1;
                     if (state.page === "dashboard") {
-                        state.filter = "PROCESSING";
-                        $("status-filter").value = "all";
+                        $("status-filter").value = "PROCESSING";
                     }
                     render();
                     await request(apiPath("retry", id), { vision });
-                    if (state.page === "dashboard") state.filter = "all";
+                    if (state.page === "dashboard")
+                        $("status-filter").value = "all";
                     await refresh();
                 } catch (error) {
-                    if (state.page === "dashboard") state.filter = "all";
+                    if (state.page === "dashboard")
+                        $("status-filter").value = "all";
                     await refresh();
                     alert(error.message);
                 }
@@ -1938,8 +1861,11 @@
             $("back-button").onclick = showDashboard;
             $("search").oninput = renderDashboard;
             $("category-filter").onchange = renderDashboard;
-            $("status-filter").onchange = () => {
-                state.filter = "all";
+            $("status-filter").onchange = renderDashboard;
+            $("clear-filters").onclick = () => {
+                $("search").value = "";
+                $("category-filter").value = "all";
+                $("status-filter").value = "all";
                 renderDashboard();
             };
             window.addEventListener("hashchange", route);

@@ -40,15 +40,16 @@ function renderUploadCard() {
       <label>Draft BL <input name="bl" type="file" accept=".pdf,.txt,application/pdf,text/plain" required /></label>
       <button class="small-btn primary" type="submit">Analyze with Gemini</button>
     </form>
-    <p id="spark-status" class="notice">Connecting to Firebase…</p>`;
-  document.getElementById("dashboard-view").prepend(card);
+    `;
+  document.getElementById("new-email-form-slot").append(card);
+  document.getElementById("spark-auth").classList.remove("hidden");
   const signIn = document.createElement("button");
   signIn.id = "spark-sign-in";
   signIn.className = "small-btn";
   signIn.type = "button";
   signIn.hidden = true;
   signIn.textContent = "Sign in with Google to view 520 emails";
-  card.append(signIn);
+  document.getElementById("spark-auth").append(signIn);
   signIn.addEventListener("click", async () => {
     signIn.disabled = true;
     try {
