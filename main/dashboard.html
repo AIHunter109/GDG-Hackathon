@@ -1046,7 +1046,22 @@
                 const all = node("option", "All statuses");
                 all.value = "all";
                 select.append(all);
-                if (category === "all" || category === "BL_COMPARISON") {
+                if (category === "all") {
+                    const group = node("optgroup");
+                    group.label = "Overview";
+                    [
+                        ["CATEGORY_PENDING", "Open category work"],
+                        ["CATEGORY_COMPLETED", "Completed category work"],
+                        ["OK", "No mismatch detected"],
+                        ["MISMATCH", "Mismatch detected"],
+                        ["NEEDS_REVIEW", "Human review required"],
+                    ].forEach(([value, label]) => {
+                        const optionNode = node("option", label);
+                        optionNode.value = value;
+                        group.append(optionNode);
+                    });
+                    select.append(group);
+                } else if (category === "BL_COMPARISON") {
                     const group = node("optgroup");
                     group.label = "Document comparison";
                     [
@@ -1065,7 +1080,7 @@
                     select.append(group);
                 }
                 for (const [workflowCategory, config] of Object.entries(CATEGORY_WORKFLOW)) {
-                    if (category !== "all" && category !== workflowCategory) continue;
+                    if (category !== workflowCategory) continue;
                     const group = node("optgroup");
                     group.label = config.title;
                     for (const [workflowState, details] of Object.entries(config.states)) {
