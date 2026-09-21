@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import re
 import sys
 import zipfile
@@ -10,7 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+MAIN_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(MAIN_DIR))
 
 from inbox import Inbox
 from ai_service import AIService
@@ -174,7 +177,11 @@ def generate_submission(inbox, *, evidence_path=None):
 
 def run():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", default=str(ROOT / "Bundle"))
+    parser.add_argument(
+        "--source",
+        default=os.getenv("INBOX_SOURCE", str(ROOT / "Bundle")),
+        help="Local bundle path or inbox server URL",
+    )
     parser.add_argument("--output", default=str(ROOT / "submission.json"))
     parser.add_argument("--evidence", default=str(ROOT / "evidence.json"))
     args = parser.parse_args()
