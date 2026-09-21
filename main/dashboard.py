@@ -258,8 +258,8 @@ class Handler(BaseHTTPRequestHandler):
                 files = payload.get("files") or []
                 if not metadata.get("subject") or not metadata.get("body"):
                     raise ValueError("Add a short description so the app can classify the submission")
-                if not 1 <= len(files) <= 10:
-                    raise ValueError("A verification submission must contain between 1 and 10 documents")
+                if not 0 <= len(files) <= 10:
+                    raise ValueError("A verification submission must contain at most 10 documents")
                 decoded = []
                 for index, item in enumerate(files):
                     try:

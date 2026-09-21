@@ -2,6 +2,9 @@
 
 import json
 import os
+import re
+import threading
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -30,6 +33,9 @@ class LocalRepository:
         self.evidence_path = ROOT / "evidence.json"
         self.submission_path = ROOT / "submission.json"
         self.decisions = RaiseIssueToHuman(ROOT / "review_decisions.json")
+        self.upload_root = ROOT / ".local_uploads"
+        self.upload_manifest = self.upload_root / "manifest.json"
+        self._lock = threading.Lock()
 
     def list_cases(self):
         return _read_json(self.evidence_path)

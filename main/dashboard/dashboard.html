@@ -338,6 +338,26 @@
                 background: #e6f3fb;
                 color: #1a668b;
             }
+            .badge.ai-pending,
+            .badge.ai-ready {
+                display: block;
+                width: fit-content;
+                margin-top: 4px;
+                background: #f2effb;
+                color: #5b4fa0;
+            }
+            .badge.ai-pending {
+                animation: ai-pulse 1.6s ease-in-out infinite;
+            }
+            @keyframes ai-pulse {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.45;
+                }
+            }
             .back {
                 margin-bottom: 13px;
             }
@@ -439,6 +459,28 @@
                 padding: 14px;
                 margin-top: 14px;
                 border-radius: 6px;
+            }
+            .ai-opinion {
+                border-left: 4px solid #7c6fd1;
+                background: #f5f3fc;
+                border-radius: 6px;
+                padding: 12px 14px;
+                margin: 14px 0;
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+            .ai-opinion .eyebrow {
+                color: #5b4fa0;
+            }
+            .ai-opinion p {
+                margin: 0;
+                font-size: 13px;
+                line-height: 1.5;
+                color: #3d3568;
+            }
+            .ai-opinion .sub {
+                color: #6b5fa8;
             }
             .evidence-grid {
                 display: grid;
@@ -634,7 +676,7 @@
                         >Local workspace</span
                     >
                     <span id="gemini-status" class="status-item"
-                        >Gemini unavailable</span
+                        >AI assistant unavailable</span
                     >
                 </div>
                 <div id="new-email-form-slot">
@@ -1129,6 +1171,11 @@
                       ? "Human review completed"
                       : LABEL[c.status] || "Processing";
             }
+            function aiReviewStatus(c, id) {
+                if (c.status !== "NEEDS_REVIEW") return null;
+                if (state.decisions[id]?.action === "resolve") return null;
+                return c.ai_review?.status || "pending";
+            }
             function resultKey(c) {
                 if (c.category !== "BL_COMPARISON")
                     return categoryWorkflowState(c) === "completed"
@@ -1578,8 +1625,8 @@
                       ? "Firestore sign-in required"
                       : "Local workspace";
                 $("gemini-status").textContent = state.features.ai_enabled
-                    ? "Gemini assistance available"
-                    : "Gemini assistance unavailable";
+                    ? "AI assistant available"
+                    : "AI assistant unavailable";
                 const showHistory = isCloud || !window.SPARK_MODE;
                 $("new-email-history").classList.toggle("hidden", !showHistory);
                 if (showHistory) {
@@ -1757,6 +1804,19 @@
                                     "secondary-text",
                                 ),
                             );
+                        const aiStatus = aiReviewStatus(c, id);
+                        if (aiStatus === "pending" || aiStatus === "running")
+                            status.append(
+                                node(
+                                    "span",
+                                    "AI reviewing",
+                                    "badge ai-pending",
+                                ),
+                            );
+                        else if (aiStatus === "done")
+                            status.append(
+                                node("span", "AI reviewed", "badge ai-ready"),
+                            );
                         const action =
                             c.category !== "BL_COMPARISON"
                                 ? resultKey(c) === "CATEGORY_COMPLETED"
@@ -1910,6 +1970,16 @@
                             ? state.email
                             : c.email || {},
                     area = $("case-content");
+                // A background refresh (reviewer action or the AI-review
+                // poll below) rebuilds this whole area from scratch; without
+                // this, any <details> the reviewer had manually opened
+                // (Full email, Attachments) would silently snap shut under
+                // them while they were still reading it.
+                const openDetails = new Set(
+                    Array.from(area.querySelectorAll("details[id]"))
+                        .filter((el) => el.open)
+                        .map((el) => el.id),
+                );
                 area.replaceChildren();
                 const head = section("Case result"),
                     box = node("div", "", "case-summary " + c.status),
@@ -2019,23 +2089,21 @@
                 renderCaseManagement(c, area);
                 if (c.category !== "BL_COMPARISON")
                     renderCategoryWorkflow(c, area);
-                renderProcessingMethod(c, area);
                 if (c.category === "BL_COMPARISON" && window.SPARK_MODE && state.features.ai_enabled)
                     area.append(
                         add(
                             section("Reanalyze documents"),
                             node(
                                 "p",
-                                "Select this email's SI and draft BL files to update its verification result with Gemini.",
+                                "Select this email's SI and draft BL files to update its verification result with AI assistance.",
                                 "muted",
                             ),
-                            reanalyzeAction,
+                            button("Reanalyze with AI", () => reanalyzeLocal(id)),
                             !state.features.ai_enabled
-                                ? node("p", "Gemini is not configured locally; native extraction will run. Set GEMINI_API_KEY and restart to enable Gemini analysis.", "muted")
+                                ? node("p", "An AI provider is not configured locally; native extraction will run. Set GEMINI_API_KEY or GONKAROUTER_API_KEY and restart to enable AI-assisted analysis.", "muted")
                                 : node("span"),
                         ),
                     );
-                }
                 if (
                     c.category === "BL_COMPARISON" &&
                     c.status !== "NOT_APPLICABLE"
@@ -2048,6 +2116,9 @@
                 )
                     renderComparison(c, area);
                 renderSource(c, e, area);
+                area.querySelectorAll("details[id]").forEach((el) => {
+                    if (openDetails.has(el.id)) el.open = true;
+                });
             }
             function caseReport(c) {
                 const e = c.email || {},
@@ -2293,60 +2364,6 @@
                 details.open = true;
                 details.scrollIntoView({ behavior: "smooth", block: "start" });
             }
-            function renderProcessingMethod(c, area) {
-                const panel = section("Processing method"),
-                    list = node("ul", "", "muted");
-                if (c.category !== "BL_COMPARISON") {
-                    list.append(
-                        node(
-                            "li",
-                            "Email classification: deterministic rules with validated Gemini fallback when intent is uncertain.",
-                        ),
-                        node(
-                            "li",
-                            `Workflow routing: ${LABEL[c.category] || c.category} queue.`,
-                        ),
-                        node(
-                            "li",
-                            "Final handling: a reviewer reads, responds, routes, or confirms the message and records completion.",
-                        ),
-                    );
-                    panel.append(
-                        node(
-                            "p",
-                            "Email → Classification → Category workflow → Reviewer action → Completed",
-                            "notice",
-                        ),
-                        list,
-                    );
-                    area.append(panel);
-                    return;
-                }
-                [
-                    "Email classification: deterministic rules with validated Gemini fallback when intent is uncertain.",
-                    "Document extraction: native parsing first; Gemini Vision/OCR can assist scanned PDFs when requested.",
-                    "Field normalization and document validation: deterministic rules.",
-                    "SI and draft BL comparison: deterministic rules across the seven required fields.",
-                    "Final verification: rules return no mismatch, mismatch, or human review; Gemini does not make the final decision.",
-                ].forEach((text) => list.append(node("li", text)));
-                panel.append(
-                    node(
-                        "p",
-                        "Email / Documents → Classification → Extraction → Gemini fallback when needed → Normalization and validation → Deterministic comparison → Match / Mismatch / Human review",
-                        "notice",
-                    ),
-                    list,
-                );
-                if (c.status === "NEEDS_REVIEW")
-                    panel.append(
-                        node(
-                            "p",
-                            "This case stopped for human review instead of guessing from uncertain evidence.",
-                            "muted",
-                        ),
-                    );
-                area.append(panel);
-            }
             function fieldResult(a, b) {
                 if (
                     !a ||
@@ -2584,6 +2601,41 @@
                 panel.append(controls);
                 slot.append(panel);
             }
+            function renderAiOpinion(c, panel) {
+                if (!state.features.ai_enabled) return;
+                const review = c.ai_review,
+                    card = node("div", "", "ai-opinion");
+                if (
+                    !review ||
+                    review.status === "pending" ||
+                    review.status === "running"
+                ) {
+                    card.append(
+                        node("div", "AI opinion", "eyebrow"),
+                        node(
+                            "p",
+                            "Reviewing this case now -- check back shortly for a grounded opinion and suggested next step.",
+                        ),
+                    );
+                } else if (review.status === "done") {
+                    card.append(
+                        node("div", "AI opinion · for reference only", "eyebrow"),
+                        node("p", review.assessment),
+                        node("p", 'Evidence: "' + review.proof + '"', "sub"),
+                        node("p", "Suggested next step: " + review.recommended_action),
+                    );
+                } else {
+                    card.append(
+                        node("div", "AI opinion", "eyebrow"),
+                        node(
+                            "p",
+                            "Unavailable for this case right now. The evidence above still stands on its own.",
+                            "muted",
+                        ),
+                    );
+                }
+                panel.append(card);
+            }
             function renderReview(c, area) {
                 if (c.status === "OK" || c.status === "MISMATCH") {
                     if (c.status === "OK")
@@ -2685,12 +2737,7 @@
                             "notice",
                         ),
                     );
-                if (state.features.ai_enabled)
-                    actions.append(
-                        button("Explain review with AI", () =>
-                            explain(c.email_id, panel),
-                        ),
-                    );
+                renderAiOpinion(c, panel);
                 if (!c.si_fields && !c.bl_fields) {
                     panel.append(
                         node(
@@ -2980,7 +3027,7 @@
                         status: "PROCESSING",
                         processing_step: vision
                             ? window.SPARK_MODE
-                                ? "Reanalyzing with Gemini"
+                                ? "Reanalyzing with AI"
                                 : "Retrying with OCR / Vision"
                             : "Retrying document verification",
                     };
@@ -3010,22 +3057,6 @@
                     await refresh();
                 } catch (error) {
                     alert(error.message);
-                }
-            }
-            async function explain(id, panel) {
-                try {
-                    const result = await request(apiPath("explain", id), {});
-                    panel.append(
-                        node(
-                            "p",
-                            result.explanation +
-                                " Recommended action: " +
-                                result.action,
-                            "notice",
-                        ),
-                    );
-                } catch (error) {
-                    panel.append(node("p", error.message, "notice error"));
                 }
             }
             async function draft(id, panel) {
@@ -3071,40 +3102,6 @@
                 state.reasonFilter = null;
                 state.summaryFilter = null;
                 renderDashboard();
-            }
-            function renderLocalVerifyCard() {
-                if (window.SPARK_MODE) return;
-                const card = node("section", "", "card");
-                card.innerHTML = `
-                    <div class="card-head">
-                        <h2>Verify documents</h2>
-                        <span class="badge">Local workspace</span>
-                    </div>
-                    <p class="muted">
-                        Review documents from the configured inbox. The Python
-                        pipeline processes the local Bundle or Docker inbox;
-                        upload processing is available in the Spark workspace.
-                    </p>
-                    <label class="filter-field">Upload type
-                        <select disabled aria-label="Upload type">
-                            <option>One email with SI and BL</option>
-                            <option>Mixed SI/BL files or folder</option>
-                            <option>Separate SI and BL folders</option>
-                        </select>
-                    </label>
-                    <div class="toolbar">
-                        <input disabled placeholder="Sender email" aria-label="Sender email" />
-                        <input disabled placeholder="Email subject" aria-label="Email subject" />
-                        <button class="small-btn primary" type="button" disabled>
-                            Verify documents
-                        </button>
-                    </div>
-                    <p class="notice">
-                        Start the batch processor with
-                        <code>python3 main/main.py</code> to process the
-                        configured inbox, then refresh this dashboard.
-                    </p>`;
-                $("new-email-form-slot").append(card);
             }
             $("back-button").onclick = showDashboard;
             if (window.SPARK_MODE) $("local-upload-card")?.remove();
@@ -3167,7 +3164,7 @@
                 }
                 submit.disabled = true;
                 status.className = "muted";
-                status.textContent = `Processing ${jobs.length} submission${jobs.length === 1 ? "" : "s"}â€¦`;
+                status.textContent = `Processing ${jobs.length} submission${jobs.length === 1 ? "" : "s"}...`;
                 try {
                     let lastResult;
                     for (let index = 0; index < jobs.length; index++) {
@@ -3177,7 +3174,7 @@
                         const body = intro || (hasPair
                             ? "Please verify and compare the attached shipping instruction and draft BL."
                             : "Please review and classify the attached document or email.");
-                        status.textContent = `Processing ${index + 1} of ${jobs.length}: ${job.key}â€¦`;
+                        status.textContent = `Processing ${index + 1} of ${jobs.length}: ${job.key}...`;
                         lastResult = await request("/api/upload/new", {
                             email: {
                                 from: form.elements.from.value.trim(),
@@ -3244,7 +3241,6 @@
                 renderDashboard();
             };
             populateStatusFilter();
-            renderLocalVerifyCard();
             window.addEventListener("hashchange", route);
             if (window.SPARK_MODE)
                 window.addEventListener("spark-case-added", async () => {
@@ -3254,6 +3250,15 @@
             if (window.SPARK_MODE)
                 window.addEventListener("spark-ready", load, { once: true });
             else load();
+            function hasPendingAiReview() {
+                return Object.entries(state.cases).some(([id, c]) => {
+                    const status = aiReviewStatus(c, id);
+                    return status === "pending" || status === "running";
+                });
+            }
+            setInterval(() => {
+                if (hasPendingAiReview()) refresh();
+            }, 4000);
         </script>
     </body>
 </html>

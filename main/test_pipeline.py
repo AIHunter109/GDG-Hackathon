@@ -110,6 +110,34 @@ class PipelineTests(unittest.TestCase):
         }
         self.assertIsNone(ai.review_case(case))
 
+    def test_ai_review_case_tolerates_a_verbose_but_grounded_assessment(self):
+        """Regression test: GonkaRouter/DeepSeek routinely writes a
+        well-grounded, non-hallucinated assessment that runs past a tight
+        length cap -- rejecting it on length alone made this feature fail
+        live even though nothing was actually wrong with the answer."""
+        ai = AIService(api_key="test")
+        case = {
+            "status": "NEEDS_REVIEW",
+            "internal_reason": "AMBIGUOUS_DOCUMENT_ROLE",
+        }
+        verbose_assessment = (
+            "The system flags this case as ambiguous regarding the document role, "
+            "meaning it cannot confidently determine the purpose or type of the "
+            "submitted document without additional human interpretation. No "
+            "validation errors or missing fields are present, so the issue is "
+            "purely about the document's intended function, which requires "
+            "human judgment to resolve."
+        )
+        self.assertGreater(len(verbose_assessment), 300)
+        ai._json = lambda prompt, **kwargs: {
+            "assessment": verbose_assessment,
+            "proof": "AMBIGUOUS_DOCUMENT_ROLE",
+            "recommended_action": "Review the document to identify whether it is the SI or BL.",
+        }
+        result = ai.review_case(case)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["assessment"], verbose_assessment)
+
     def test_ai_draft_uses_confirmed_values_only(self):
         ai = AIService(api_key="test")
         case = {

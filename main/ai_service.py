@@ -405,19 +405,28 @@ class AIService:
                 "missing values or decide whether the SI and BL match -- that stays "
                 "a human decision. Return a JSON object with exactly these three "
                 'keys and no others: "assessment" (plain-language opinion on what '
-                'is actually going on), "proof" (an exact, verbatim quote copied '
+                "is actually going on, in one or two short sentences, at most 300 "
+                'characters), "proof" (an exact, verbatim quote copied '
                 "character-for-character from the evidence below -- do not "
                 'paraphrase or summarize it), and "recommended_action" (one '
-                "concrete next step for the reviewer). Evidence: " + evidence_text
+                "concrete next step for the reviewer, one short sentence). "
+                "Evidence: " + evidence_text
             )
             if not isinstance(result, dict):
                 return None
             assessment, proof, action = (
                 result.get(key) for key in ("assessment", "proof", "recommended_action")
             )
-            if not all(
-                isinstance(value, str) and 5 <= len(value.strip()) <= 300
-                for value in (assessment, proof, action)
+            # Caps are generous headroom above what the prompt asks for --
+            # models (GonkaRouter/DeepSeek especially) don't always land
+            # exactly under a requested character count, and rejecting an
+            # otherwise well-grounded, non-hallucinated answer over a few
+            # extra characters would make this feature fail more often than
+            # it should.
+            if not (
+                isinstance(assessment, str) and 5 <= len(assessment.strip()) <= 450
+                and isinstance(proof, str) and 5 <= len(proof.strip()) <= 300
+                and isinstance(action, str) and 5 <= len(action.strip()) <= 350
             ):
                 return None
             if proof.strip() not in evidence_text:
