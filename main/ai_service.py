@@ -26,7 +26,7 @@ class AIService:
         self.api_key = (
             api_key if api_key is not None else os.getenv("GEMINI_API_KEY", "")
         )
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
     @property
     def enabled(self):
@@ -133,6 +133,8 @@ class AIService:
             confidence = float(result.get("confidence", 0))
         except (TypeError, ValueError):
             return None
+        if not 0 <= confidence <= 1:
+            return None
         return {
             "si": next(d for d in documents if d["path"] == result["si_path"]),
             "bl": next(d for d in documents if d["path"] == result["bl_path"]),
@@ -166,6 +168,8 @@ class AIService:
         try:
             confidence = float(result.get("confidence", 0))
         except (TypeError, ValueError):
+            return None
+        if not 0 <= confidence <= 1:
             return None
         return {"text": result["text"], "confidence": confidence}
 

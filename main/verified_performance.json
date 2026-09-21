@@ -1,0 +1,15 @@
+{
+  "dataset": "Included 520-email evaluation set",
+  "emails_evaluated": 520,
+  "verified_at": "2026-09-21",
+  "classification_accuracy": 1.0,
+  "classification_macro_f1": 1.0,
+  "mismatch_precision": 1.0,
+  "mismatch_recall": 1.0,
+  "defect_field_f1": 1.0,
+  "exact_match_rate": 1.0,
+  "expected_reviews": 20,
+  "predicted_reviews": 20,
+  "false_reviews": 0,
+  "missed_reviews": 0
+}

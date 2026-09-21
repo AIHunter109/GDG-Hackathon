@@ -6,6 +6,7 @@
 submission.json
 evidence.json
 review_decisions.json
+review_diagnostics.json
 dashboard.*.log
 .uv-cache/
 
@@ -24,6 +25,10 @@ env/
 # Local configuration
 .env
 .env.*
+/spark/node_modules/
+/spark/dist/
+/spark/private/
+/spark/index.html
 
 # Editor and operating-system files
 .vscode/
