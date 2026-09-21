@@ -3,7 +3,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { getFirestore, collection, doc, getDocs, setDoc } from "firebase/firestore";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
 import { FIELDS, applyReview, fieldRecord, linkedOriginalId, metricsFor, partitionLinkedAnalyses, recompare, syntheticCases } from "./core.js";
-import { extractTextFields, hasAllFields, validatePairIdentifiers } from "./batch.js";
+import { extractTextFields, hasAllFields, validateDocumentConsistency, validatePairIdentifiers } from "./batch.js";
 import { mountBatchUploader } from "./batch_ui.js";
 
 const LOCAL_KEY = "shipping-verifier-spark-preview-v1";
@@ -331,7 +331,20 @@ async function request(url, body) {
     if (revised.documents[otherRole] === path) {
       [revised.documents.si, revised.documents.bl] = [revised.documents.bl, revised.documents.si];
       [revised.si_fields, revised.bl_fields] = [revised.bl_fields, revised.si_fields];
-    } else revised.documents[role] = path;
+    } else {
+      revised.documents[role] = path;
+      const text = revised.document_texts?.[path];
+      revised[`${role}_fields`] = typeof text === "string" ? extractTextFields(text, path) : {};
+    }
+    const siText = revised.document_texts?.[revised.documents.si] || "";
+    const blText = revised.document_texts?.[revised.documents.bl] || "";
+    revised.validation = {
+      pairing: validatePairIdentifiers(siText, blText),
+      consistency: {
+        si: validateDocumentConsistency(siText, revised.si_fields),
+        bl: validateDocumentConsistency(blText, revised.bl_fields),
+      },
+    };
     const decision = { action: "select_document", corrections: { [role]: path }, updated_at: new Date().toISOString() };
     const verified = recompare(revised);
     await saveRecord(id, { case: verified, decision });
@@ -393,7 +406,10 @@ async function analyzeFiles(subject, si, bl, previousId = null, emailMetadata = 
     documents: { si: paths[0], bl: paths[1] },
     document_texts: { [paths[0]]: siData.text, [paths[1]]: blData.text },
     si_fields: siData.fields, bl_fields: blData.fields,
-    validation: { pairing, consistency: { si: { valid: true }, bl: { valid: true } } },
+    validation: { pairing, consistency: {
+      si: validateDocumentConsistency(siData.text, siData.fields),
+      bl: validateDocumentConsistency(blData.text, blData.fields),
+    } },
   });
   if (!pairing.valid) {
     record.status = "NEEDS_REVIEW";

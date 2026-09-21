@@ -33,6 +33,16 @@ test("reviewer correction recomputes the decision", () => {
   assert.equal(original.status, "NEEDS_REVIEW");
 });
 
+test("reviewer changes cannot clear failed document validation", () => {
+  const original = syntheticCases().demo_review.case;
+  original.validation.pairing = { valid: false, conflicts: ["booking"] };
+  const result = applyReview(original, "correct", {
+    role: "bl", field: "notify_party", value: "Northstar Logistics",
+  });
+  assert.equal(result.caseRecord.status, "NEEDS_REVIEW");
+  assert.equal(result.caseRecord.internal_reason, "POSSIBLE_WRONG_DOCUMENT_PAIR");
+});
+
 test("reopening a completed review restores the pending review count", () => {
   const review = syntheticCases().demo_review;
   const resolved = { case: review.case, decision: { action: "resolve" } };

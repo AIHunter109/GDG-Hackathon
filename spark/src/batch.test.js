@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { batchCaseId, extractTextFields, hasAllFields, pairDocuments, validatePairIdentifiers } from "./batch.js";
+import { batchCaseId, extractTextFields, hasAllFields, pairDocuments,
+  validateDocumentConsistency, validatePairIdentifiers } from "./batch.js";
 
 const file = (name, path = name, size = 100) => ({ name, webkitRelativePath: path, size, lastModified: 42 });
 
@@ -55,4 +56,19 @@ test("conflicting shipment identifiers require review despite matching filenames
   const result = validatePairIdentifiers("Booking Ref: BK123\nShipper: ACME", "Booking Ref: BK999\nShipper: ACME");
   assert.equal(result.valid, false);
   assert.deepEqual(result.conflicts, ["booking"]);
+});
+
+test("container rows and weights are checked against declared totals", () => {
+  const fields = {
+    container_count: { normalized_value: 2 },
+    gross_weight_kg: { normalized_value: "400" },
+  };
+  const valid = "ABCD1234567\n40HC\n200\nEFGH1234567\n40HC\n200";
+  assert.equal(validateDocumentConsistency(valid, fields).valid, true);
+  assert.equal(validateDocumentConsistency(valid, {
+    ...fields, container_count: { normalized_value: 3 },
+  }).valid, false);
+  assert.equal(validateDocumentConsistency(valid, {
+    ...fields, gross_weight_kg: { normalized_value: "300" },
+  }).valid, false);
 });

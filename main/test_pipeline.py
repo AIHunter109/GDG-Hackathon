@@ -31,6 +31,12 @@ class PipelineTests(unittest.TestCase):
         ai._json = lambda prompt, **kwargs: {"category": "MADE_UP", "confidence": 1}
         self.assertIsNone(ai.classify_email({"subject": "x", "body": "x", "attachments": []}))
 
+        documents = [doc("Shipping Instruction", "si.txt"), doc("Draft Bill of Lading", "bl.txt")]
+        ai._json = lambda prompt, **kwargs: {"si_path": "si.txt", "bl_path": "bl.txt", "confidence": 2}
+        self.assertIsNone(ai.identify_documents({}, documents))
+        ai._json = lambda prompt, **kwargs: {"text": "Shipper: ACME", "confidence": -1}
+        self.assertIsNone(ai.transcribe_pdf(b"synthetic"))
+
     def test_ai_review_explanation_is_brief_and_cannot_change_status(self):
         ai = AIService(api_key="test")
         ai._json = lambda prompt, **kwargs: {"explanation": "The gross weight is unclear in the source.",

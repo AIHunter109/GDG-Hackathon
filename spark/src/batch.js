@@ -135,3 +135,26 @@ export function validatePairIdentifiers(siText, blText) {
   const conflicts = Object.keys(si).filter((key) => bl[key] && si[key] !== bl[key]);
   return { valid: conflicts.length === 0, conflicts, si, bl };
 }
+
+export function validateDocumentConsistency(text, fields = {}) {
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim());
+  const rowPositions = lines.flatMap((line, index) => /^[A-Z]{4}\d{7}$/.test(line) ? [index] : []);
+  const declared = fields.container_count?.normalized_value;
+  if (rowPositions.length && declared != null && rowPositions.length !== Number(declared)) {
+    return { valid: false, reason: "DOCUMENT_INTERNAL_INCONSISTENCY",
+      evidence: `${rowPositions.length} container rows vs declared ${declared}` };
+  }
+  const weights = rowPositions.flatMap((position) => {
+    const value = lines.slice(position + 1, position + 4)
+      .map((candidate) => /^\d[\d,]*(?:\.\d+)?$/.test(candidate) ? Number(candidate.replaceAll(",", "")) : null)
+      .find((candidate) => candidate != null);
+    return value == null ? [] : [value];
+  });
+  const total = fields.gross_weight_kg?.normalized_value;
+  if (rowPositions.length && weights.length === rowPositions.length && total != null &&
+      Math.abs(weights.reduce((sum, value) => sum + value, 0) - Number(total)) > 0.001) {
+    return { valid: false, reason: "DOCUMENT_INTERNAL_INCONSISTENCY",
+      evidence: `Container weights sum to ${weights.reduce((sum, value) => sum + value, 0)} kg vs declared ${total} kg` };
+  }
+  return { valid: true, container_rows: rowPositions.length, reconciled_weights: weights.length };
+}

@@ -133,6 +133,8 @@ class AIService:
             confidence = float(result.get("confidence", 0))
         except (TypeError, ValueError):
             return None
+        if not 0 <= confidence <= 1:
+            return None
         return {
             "si": next(d for d in documents if d["path"] == result["si_path"]),
             "bl": next(d for d in documents if d["path"] == result["bl_path"]),
@@ -166,6 +168,8 @@ class AIService:
         try:
             confidence = float(result.get("confidence", 0))
         except (TypeError, ValueError):
+            return None
+        if not 0 <= confidence <= 1:
             return None
         return {"text": result["text"], "confidence": confidence}
 

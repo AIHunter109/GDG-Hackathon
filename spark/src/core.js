@@ -61,7 +61,13 @@ export function recompare(caseRecord) {
   result.missing_fields = missing_fields;
   result.uncertain_fields = FIELDS.filter((field) =>
     ["si", "bl"].some((role) => (result[`${role}_fields`]?.[field]?.confidence || 0) < 0.9));
-  if (missing_fields.length) {
+  const pairingInvalid = result.validation?.pairing?.valid === false;
+  const consistencyInvalid = Object.values(result.validation?.consistency || {})
+    .some((check) => check?.valid === false);
+  if (pairingInvalid || consistencyInvalid) {
+    Object.assign(result, { status: "NEEDS_REVIEW", review_reason: "wrong_doc_type",
+      internal_reason: pairingInvalid ? "POSSIBLE_WRONG_DOCUMENT_PAIR" : "DOCUMENT_INTERNAL_INCONSISTENCY" });
+  } else if (missing_fields.length) {
     Object.assign(result, { status: "NEEDS_REVIEW", review_reason: "missing_value", internal_reason: "MISSING_REQUIRED_FIELD" });
   } else if (result.uncertain_fields.length) {
     Object.assign(result, { status: "NEEDS_REVIEW", review_reason: "missing_value", internal_reason: "LOW_EXTRACTION_CONFIDENCE" });

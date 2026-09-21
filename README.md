@@ -15,19 +15,19 @@ The seven verified fields are:
 ## What the system provides
 
 - **Email classification:** separates document comparisons, SI requests, invoice queries, general email, and spam.
-- **Document processing:** reads TXT, XLSX, DOCX, and PDF in the Python pipeline. Native extraction runs first; Gemini is used only for uncertain intent, ambiguous document roles, unfamiliar labels, image-only PDFs, and requested review explanations.
+- **Document processing:** reads TXT, XLSX, DOCX, and PDF in the Python pipeline. Native extraction runs first; Gemini is used only for uncertain intent, ambiguous document roles, unfamiliar labels, image-only PDFs, requested review explanations, and optional correction-email wording.
 - **Deterministic verification:** normalizes the seven fields, checks shipment identifiers and document totals, then reports no mismatch, mismatch, human review, processing, or processing failure. AI does not make the final comparison decision.
 - **Reviewer workspace:** shows dashboard totals, combined search/category/status filters, the 520 source emails, attachment counts, and a separate history for new submissions.
 - **Case Detail:** shows the email, attachment text, SI and draft BL evidence, normalized values, discrepancies, validation results, and reviewer actions in one page.
 - **Human review:** reviewers can confirm or correct a field, mark values equivalent, choose which attachment is the SI or draft BL, retry extraction or OCR, confirm a mismatch, resolve a review, and reopen a completed review.
 - **Correction drafting:** creates a draft only after a mismatch is confirmed. The application never sends it automatically.
 - **Combined upload:** one **Add emails and documents** function supports a single email with SI/BL files, mixed SI/BL files or a folder, and separate SI and BL folders.
-- **Batch safety:** previews pairs before processing, leaves unclear files unprocessed for manual pairing, handles 1–10 pairs per run, pauses after the current pair, retries failures, and skips saved file signatures.
+- **Batch safety:** previews pairs before processing, leaves unclear files unprocessed for manual pairing, handles 1–10 pairs per run, pauses after the current pair, retries failures, and skips a saved pair with the same pairing key, filenames, sizes, and modified timestamps.
 - **Private cloud demo:** Firebase Authentication and Firestore rules restrict the original dataset to the verified project owner. The public Hosting files contain no original email data or attachment binaries.
 
 ### Status meanings
 
-- **No mismatch detected:** All seven available normalized SI and draft BL values agree.
+- **No mismatch detected:** All seven required normalized SI and draft BL values are present and agree.
 - **Mismatch detected:** At least one verified field differs.
 - **Human review required:** A document, value, role, identifier, or AI-derived extraction needs reviewer confirmation.
 - **Human review completed:** A reviewer resolved the case. It can be reopened from Case Detail.
@@ -73,7 +73,7 @@ The seven verified fields are:
 
 1. Classify the email. A low-confidence rules result can use Gemini, but only a validated high-confidence response replaces it.
 2. For document-comparison emails, determine whether the thread is waiting for documents or contains an actionable SI/BL comparison request.
-3. Read the attachments, identify the SI and draft BL, and extract the seven fields. Native parsing runs before AI fallback.
+3. Read the attachments, identify the SI and draft BL, and extract the seven fields. Native parsing runs before AI fallback. AI category and role responses are restricted to known values, AI field values require exact quoted source evidence, and AI PDF transcriptions are assigned lower trust.
 4. Validate strong shipment identifiers and internal container/weight totals.
 5. Require human review when a necessary document or value is missing, a document is unreadable, roles or identifiers conflict, evidence is inconsistent, or extraction remains uncertain.
 6. When evidence is complete and dependable, compare normalized SI and draft BL values. Any difference produces **Mismatch detected**; otherwise the result is **No mismatch detected**.
@@ -91,7 +91,7 @@ uv pip install --python .venv\Scripts\python.exe -r main\requirements.txt
 
 `python main/main.py --source <bundle-or-http-url> --output <path> --evidence <path>` accepts another bundle or the organizer's inbox endpoint.
 
-TXT, XLSX, and DOCX extraction use the Python standard library. Selectable PDF text uses pypdf. Set `GEMINI_API_KEY` to enable AI fallback for uncertain email intent, document roles, unfamiliar labels, and image-only PDF transcription. AI output is checked against source evidence and low-confidence extraction is sent to human review. Decisions use `NEEDS_REVIEW` plus the bundle's allowed review reasons in the submission. More specific internal reasons and source text remain in `evidence.json`.
+TXT, XLSX, and DOCX extraction use the Python standard library. Selectable PDF text uses pypdf. Set `GEMINI_API_KEY` to enable AI fallback for uncertain email intent, document roles, unfamiliar labels, and image-only PDF transcription. AI responses are schema checked; semantic field mappings must quote text present in the source document, and lower-confidence extraction is sent to human review. Decisions use `NEEDS_REVIEW` plus the bundle's allowed review reasons in the submission. More specific internal reasons and source text remain in `evidence.json`.
 
 ## Reviewer dashboard
 
@@ -107,7 +107,7 @@ The hosted browser edition has one **Add emails and documents** function with th
 2. **Mixed SI/BL files or folder:** identifies roles from names and folders, pairs documents by a shared shipment key, and presents the proposed pairs before processing.
 3. **Separate SI and BL folders:** pairs corresponding files across the two folders and presents incomplete or ambiguous matches for manual action.
 
-The browser uploader accepts PDF and TXT files up to 5 MB each. TXT documents are read locally in the browser. In single-email mode, Gemini can fill missing TXT fields after the reviewer starts analysis; batch TXT processing remains local and routes incomplete extraction to review. PDFs use Gemini only after processing begins. Batch processing handles 1–10 pairs per run and supports pause, retry, manual pairing, and duplicate skipping. Conflicting booking, OC, or BL identifiers are routed to human review. New emails and completed document batches appear under **New email history**; they do not change the count of 520 original emails.
+The browser uploader accepts PDF and TXT files up to 5 MB each. TXT documents are read locally in the browser. In single-email mode, Gemini can fill missing TXT fields after the reviewer starts analysis; batch TXT processing remains local and routes incomplete extraction to review. PDFs use Gemini only after processing begins. Browser verification checks booking, OC, and BL identifiers plus explicit container rows and weight totals before comparing the seven fields. Batch processing handles 1–10 pairs per run and supports pause, retry, manual pairing, and duplicate skipping. Conflicting identifiers or totals are routed to human review. New emails and completed document batches appear under **New email history**; they do not change the count of 520 original emails.
 
 An email that only asks someone to send a draft BL is treated as awaiting documents and does not create a human verification task. A message that explicitly asks to compare both the SI and draft BL still requires review when either document is missing. This keeps document-request threads out of the exception queue while preserving genuine missing-attachment cases.
 
