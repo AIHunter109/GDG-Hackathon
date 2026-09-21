@@ -3,6 +3,8 @@ import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { getFirestore, collection, doc, getDocs, setDoc } from "firebase/firestore";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
 import { FIELDS, applyReview, fieldRecord, linkedOriginalId, metricsFor, partitionLinkedAnalyses, recompare, syntheticCases } from "./core.js";
+import { extractTextFields, hasAllFields, validatePairIdentifiers } from "./batch.js";
+import { mountBatchUploader } from "./batch_ui.js";
 
 const LOCAL_KEY = "shipping-verifier-spark-preview-v1";
 let records = syntheticCases();
@@ -254,7 +256,6 @@ async function request(url, body) {
   const [, api, action, encodedId, index] = new URL(url, location.origin).pathname.split("/");
   if (api !== "api") throw new Error("Unknown request");
   if (action === "cases") {
-    if (database) await reloadCloudRecords();
     return currentData();
   }
   const id = decodeURIComponent(encodedId || "");
@@ -341,11 +342,20 @@ function fileToPart(file) {
   });
 }
 
-async function extractFile(file, role) {
+async function extractFile(file, role, options = {}) {
   if (file.size > 5_000_000) throw new Error("Use files smaller than 5 MB for the free demo");
   if (!/\.(pdf|txt)$/i.test(file.name)) throw new Error("Choose a PDF or TXT document");
+  let nativeText = null;
+  let nativeFields = {};
+  if (file.name.toLowerCase().endsWith(".txt")) {
+    nativeText = (await file.text()).slice(0, 12000);
+    nativeFields = extractTextFields(nativeText, file.name);
+    if (hasAllFields(nativeFields) || options.allowAIForTxt === false) {
+      return { text: nativeText, fields: nativeFields };
+    }
+  }
   const prompt = `Read this ${role === "si" ? "shipping instruction" : "draft bill of lading"}. Return only JSON with keys text and fields. text must faithfully transcribe the document. fields must be an object with only these seven keys: ${FIELDS.join(", ")}. Each present field must have raw_value, source_text (an exact quote from text containing raw_value), and confidence from 0 to 1. Omit absent or illegible values. Never infer missing values.`;
-  const part = file.name.toLowerCase().endsWith(".txt") ? await file.text() : await fileToPart(file);
+  const part = nativeText ?? await fileToPart(file);
   const result = await model.generateContent([prompt, part]);
   const parsed = JSON.parse(result.response.text());
   if (typeof parsed.text !== "string" || !parsed.fields || typeof parsed.fields !== "object") throw new Error("Gemini returned incomplete document evidence");
@@ -357,24 +367,30 @@ async function extractFile(file, role) {
     const record = fieldRecord(field, item.raw_value, file.name, Math.min(Number(item.confidence) || 0.6, 0.8), "gemini_document_extraction");
     if (record?.normalized_value != null) fields[field] = { ...record, source_text: item.source_text };
   }
-  return { text: parsed.text.slice(0, 12000), fields };
+  return { text: nativeText ?? parsed.text.slice(0, 12000), fields: { ...nativeFields, ...fields } };
 }
 
-async function analyzeFiles(subject, si, bl, previousId = null, emailMetadata = {}) {
-  const siData = await extractFile(si, "si");
-  const blData = await extractFile(bl, "bl");
+async function analyzeFiles(subject, si, bl, previousId = null, emailMetadata = {}, options = {}) {
+  const siData = await extractFile(si, "si", options);
+  const blData = await extractFile(bl, "bl", options);
+  const pairing = validatePairIdentifiers(siData.text, blData.text);
   const id = previousId || `upload_${Date.now()}`;
   const paths = [`SI-${si.name}`, `BL-${bl.name}`];
   const record = recompare({
     email_id: id, category: "BL_COMPARISON", status: "PROCESSING",
-    classification: { method: "gemini", confidence: 1 },
+    classification: { method: "document_upload", confidence: 1 },
     email: { email_id: id, from: emailMetadata.from || "Browser upload", to: emailMetadata.to || "Reviewer", subject,
       body: emailMetadata.body || "Documents selected by the reviewer for AI-assisted comparison.", attachments: paths },
     documents: { si: paths[0], bl: paths[1] },
     document_texts: { [paths[0]]: siData.text, [paths[1]]: blData.text },
     si_fields: siData.fields, bl_fields: blData.fields,
-    validation: { pairing: { valid: true }, consistency: { si: { valid: true }, bl: { valid: true } } },
+    validation: { pairing, consistency: { si: { valid: true }, bl: { valid: true } } },
   });
+  if (!pairing.valid) {
+    record.status = "NEEDS_REVIEW";
+    record.internal_reason = "POSSIBLE_WRONG_DOCUMENT_PAIR";
+    record.review_reason = "wrong_doc_type";
+  }
   uploadFiles.set(id, { si, bl, urls: [URL.createObjectURL(si), URL.createObjectURL(bl)] });
   return record;
 }
@@ -382,6 +398,24 @@ async function analyzeFiles(subject, si, bl, previousId = null, emailMetadata = 
 window.sparkRequest = request;
 window.sparkAttachmentUrl = (id, index) => uploadFiles.get(id)?.urls[Number(index)] || null;
 renderUploadCard();
+mountBatchUploader({
+  container: document.getElementById("new-email-form-slot"),
+  ready: () => Boolean(database && model),
+  originalIds: () => Object.keys(baseRecords),
+  hasRecord: (id) => Boolean(records[id]),
+  processPair: async (pair, id) => {
+    const caseRecord = await analyzeFiles(
+      `Document batch: ${pair.key}`, pair.si.file, pair.bl.file, id,
+      { from: "Document batch", to: "Reviewer",
+        body: "SI and draft BL were uploaded as a document batch. No source email was provided." },
+      { allowAIForTxt: false },
+    );
+    caseRecord.batch_import = { pairing_key: pair.key,
+      si_file: pair.si.path, bl_file: pair.bl.path };
+    await saveRecord(id, { case: caseRecord, decision: null });
+  },
+  onSaved: () => window.dispatchEvent(new Event("spark-case-added")),
+});
 try {
   await connectFirebase();
 } catch (error) {

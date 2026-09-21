@@ -128,6 +128,19 @@
             .toolbar {
                 margin: 0 0 12px;
             }
+            .batch-inputs {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(240px, 1fr));
+            }
+            .batch-inputs label {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                min-width: 0;
+            }
+            .batch-inputs input {
+                width: 100%;
+            }
             .filter-field {
                 display: flex;
                 align-items: center;
@@ -490,7 +503,8 @@
                     display: block;
                 }
                 .detail-grid,
-                .evidence-grid {
+                .evidence-grid,
+                .batch-inputs {
                     grid-template-columns: 1fr;
                 }
                 .case-summary dl {
@@ -584,7 +598,7 @@
                         <h2>New email history</h2>
                         <span id="new-email-count" class="muted"></span>
                     </div>
-                    <p class="muted">Emails submitted in this app appear here.</p>
+                    <p class="muted">New emails and document batches submitted in this app appear here.</p>
                     <div class="table-scroll">
                         <table class="master">
                             <thead>
