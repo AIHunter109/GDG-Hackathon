@@ -128,7 +128,6 @@ class CloudRepository:
 
     def save_decision(self, email_id, action, note="", corrections=None):
         from datetime import datetime, timezone
-<<<<<<< HEAD
 
         if action not in {
             "confirm",
@@ -138,9 +137,6 @@ class CloudRepository:
             "resolve",
             "select_document",
         }:
-=======
-        if action not in {"confirm", "confirm_value", "correct", "mark_equivalent", "resolve", "reopen", "select_document"}:
->>>>>>> 1b18a5bcebf7f3cd550e45c921df91f261a382e6
             raise ValueError("Unknown reviewer action")
         decision = {
             "action": action,
