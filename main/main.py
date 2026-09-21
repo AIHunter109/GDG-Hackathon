@@ -27,6 +27,20 @@ from inbox import Inbox
 LOG = logging.getLogger(__name__)
 
 
+def is_actionable_comparison_request(email):
+    """Return true when the message explicitly asks to compare both SI and BL.
+
+    Thread messages that ask someone to send a draft BL are correctly classified
+    as BL-related, but they do not yet contain a document pair to verify. They
+    should not create a human verification task until both documents are expected.
+    """
+    message = " ".join((email.get("subject", ""), email.get("body", ""))).lower()
+    has_si = bool(re.search(r"shipping instruction|\bsi\b", message))
+    has_bl = bool(re.search(r"draft\s*(?:b/?l|bill of lading)|\bb/?l\b", message))
+    compare = bool(re.search(r"compare|verify|check\s+(?:the\s+)?si|si\s+and\s+(?:the\s+)?draft|confirm\s+(?:the\s+)?(?:si|documents?)", message))
+    return has_si and has_bl and compare
+
+
 def _submission_record(category, status="OK", fields=(), reason=None):
     return {
         "category": category,
@@ -101,11 +115,19 @@ def process_email(email, inbox, role_override=None, *, force_vision=False):
         return _submission_record(category), case
     paths = email.get("attachments", [])
     if not paths:
+<<<<<<< HEAD
         case.update(
             status="NEEDS_REVIEW",
             review_reason="missing_attachment",
             internal_reason="MISSING_SI_AND_BL",
         )
+=======
+        if not is_actionable_comparison_request(email):
+            case.update(status="NOT_APPLICABLE", internal_reason="AWAITING_COMPARISON_DOCUMENTS")
+            return _submission_record(category), case
+        case.update(status="NEEDS_REVIEW", review_reason="missing_attachment",
+                    internal_reason="MISSING_SI_AND_BL")
+>>>>>>> 1b18a5bcebf7f3cd550e45c921df91f261a382e6
         return _review_record(category, case, "missing_attachment")
     processing_step = "Reading attachments"
     try:

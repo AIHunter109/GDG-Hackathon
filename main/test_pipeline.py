@@ -8,6 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ai_service import AIService
+<<<<<<< HEAD
 from classify import classify_email
 from comparator import FIELDS, compare_documents
 from extractor import (
@@ -18,6 +19,13 @@ from extractor import (
     validate_document_consistency,
     validate_document_pair,
 )
+=======
+from comparator import compare_documents, FIELDS
+from extractor import (extract_fields, identify_documents, normalize_value, read_document,
+                       validate_document_consistency, validate_document_pair)
+from main import generate_submission, process_email
+from review_diagnostics import build_review_diagnostics
+>>>>>>> 1b18a5bcebf7f3cd550e45c921df91f261a382e6
 from review_actions import apply_correction, confirm_value, mark_equivalent
 
 from main import generate_submission, process_email
@@ -47,6 +55,12 @@ class PipelineTests(unittest.TestCase):
         self.assertIsNone(
             ai.classify_email({"subject": "x", "body": "x", "attachments": []})
         )
+
+        documents = [doc("Shipping Instruction", "si.txt"), doc("Draft Bill of Lading", "bl.txt")]
+        ai._json = lambda prompt, **kwargs: {"si_path": "si.txt", "bl_path": "bl.txt", "confidence": 2}
+        self.assertIsNone(ai.identify_documents({}, documents))
+        ai._json = lambda prompt, **kwargs: {"text": "Shipper: ACME", "confidence": -1}
+        self.assertIsNone(ai.transcribe_pdf(b"synthetic"))
 
     def test_ai_review_explanation_is_brief_and_cannot_change_status(self):
         ai = AIService(api_key="test")
@@ -144,6 +158,41 @@ class PipelineTests(unittest.TestCase):
             )["category"],
             "SPAM",
         )
+
+    def test_draft_request_without_documents_does_not_create_review(self):
+        email = {"email_id": "draft_request", "subject": "Draft BL for checking",
+                 "body": "Please send the draft BL for booking ABC for checking.", "attachments": []}
+        record, case = process_email(email, None)
+        self.assertEqual(record["category"], "BL_COMPARISON")
+        self.assertEqual(record["status"], "OK")
+        self.assertEqual(case["status"], "NOT_APPLICABLE")
+        self.assertEqual(case["internal_reason"], "AWAITING_COMPARISON_DOCUMENTS")
+
+    def test_actionable_comparison_without_documents_requires_review(self):
+        email = {"email_id": "missing_pair", "subject": "Compare SI and draft BL",
+                 "body": "Please compare the SI and draft BL; the attachments were dropped.", "attachments": []}
+        record, case = process_email(email, None)
+        self.assertEqual(record["status"], "NEEDS_REVIEW")
+        self.assertEqual(record["review_reason"], "missing_attachment")
+        self.assertEqual(case["internal_reason"], "MISSING_SI_AND_BL")
+
+    def test_review_diagnostics_reports_false_reviews(self):
+        submission = {
+            "expected": {"status": "NEEDS_REVIEW", "review_reason": "unreadable"},
+            "extra": {"status": "NEEDS_REVIEW", "review_reason": "missing_attachment"},
+            "ok": {"status": "OK", "review_reason": None},
+        }
+        evidence = {
+            "expected": {"internal_reason": "UNREADABLE_DOCUMENT", "email": {"attachments": ["scan.pdf"]}},
+            "extra": {"internal_reason": "MISSING_SI_AND_BL", "email": {"attachments": []}},
+        }
+        truth = {
+            "expected": {"status": "NEEDS_REVIEW"}, "extra": {"status": "OK"}, "ok": {"status": "OK"},
+        }
+        report = build_review_diagnostics(submission, evidence, truth)
+        self.assertEqual(report["false_reviews"], 1)
+        self.assertEqual(report["missed_reviews"], 0)
+        self.assertEqual(report["by_internal_reason"], {"MISSING_SI_AND_BL": 1})
 
     def test_alias_extraction_and_normalization(self):
         fields = extract_fields(

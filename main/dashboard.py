@@ -28,6 +28,7 @@ from review_actions import (
 from main import build_evidence_report, process_email
 
 LOG = logging.getLogger(__name__)
+VERIFIED_PERFORMANCE = json.loads((Path(__file__).parent / "verified_performance.json").read_text(encoding="utf-8"))
 
 
 def metrics_for(cases, decisions=None):
@@ -35,6 +36,7 @@ def metrics_for(cases, decisions=None):
     statuses = Counter(c["status"] for c in cases.values())
     categories = Counter(c["category"] for c in cases.values())
     comparison = [c for c in cases.values() if c["category"] == "BL_COMPARISON"]
+<<<<<<< HEAD
     paired = [
         c
         for c in comparison
@@ -89,6 +91,36 @@ def metrics_for(cases, decisions=None):
             else 0
         ),
     }
+=======
+    paired = [c for c in comparison if c.get("si_fields") is not None and c.get("bl_fields") is not None]
+    extracted = sum(c.get(role + "_fields", {}).get(field, {}).get("normalized_value") is not None
+                    for c in paired for role in ("si", "bl") for field in FIELDS)
+    unresolved_reviews = sum(c["status"] == "NEEDS_REVIEW" and
+                             decisions.get(email_id, {}).get("action") != "resolve"
+                             for email_id, c in cases.items())
+    ai_assisted = sum(c.get("classification", {}).get("method") == "gemini" or
+                      c.get("document_identification", {}).get("method") == "gemini_role_detection" or
+                      any(field.get("method", "").startswith("gemini") for group in
+                          (c.get("si_fields", {}), c.get("bl_fields", {})) for field in group.values())
+                      for c in cases.values())
+    verification_results = dict(Counter(c["status"] for c in comparison))
+    verification_results["NOT_APPLICABLE"] = (verification_results.get("NOT_APPLICABLE", 0) +
+                                                len(cases) - len(comparison))
+    return {"total": len(cases), "categories": dict(categories), "statuses": dict(statuses),
+            "verification_results": verification_results,
+            "comparison_requests": len(comparison),
+            "automatically_cleared": sum(c["status"] == "OK" for c in comparison),
+            "mismatches": statuses["MISMATCH"],
+            "human_review": unresolved_reviews,
+            "processing_failures": statuses["PROCESSING_FAILED"],
+            "processing": statuses["PROCESSING"],
+            "field_extraction_coverage": extracted / (2 * len(FIELDS) * len(paired)) if paired else None,
+            "human_review_rate": unresolved_reviews / len(comparison) if comparison else 0,
+            "processing_failure_rate": statuses["PROCESSING_FAILED"] / len(cases) if cases else 0,
+            "ai_assisted_cases": ai_assisted,
+            "automation_rate": (sum(c["status"] == "OK" for c in comparison) / len(comparison)
+                                if comparison else 0)}
+>>>>>>> 1b18a5bcebf7f3cd550e45c921df91f261a382e6
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -154,6 +186,7 @@ class Handler(BaseHTTPRequestHandler):
             if parts == ["api", "cases"]:
                 cases = self.store().list_cases()
                 decisions = self.store().list_decisions()
+<<<<<<< HEAD
                 return self._send(
                     200,
                     {
@@ -166,6 +199,13 @@ class Handler(BaseHTTPRequestHandler):
                         },
                     },
                 )
+=======
+                return self._send(200, {"cases": cases, "decisions": decisions,
+                                        "metrics": metrics_for(cases, decisions),
+                                        "features": {"ai_enabled": AIService().enabled,
+                                                     "cloud_mode": bool(os.getenv("GCS_BUCKET")),
+                                                     "verified_performance": VERIFIED_PERFORMANCE}})
+>>>>>>> 1b18a5bcebf7f3cd550e45c921df91f261a382e6
             if len(parts) == 3 and parts[:2] == ["api", "email"]:
                 return self._send(200, self.store().get_email(parts[2]))
             if len(parts) == 4 and parts[:2] == ["api", "attachment"]:
@@ -216,6 +256,9 @@ class Handler(BaseHTTPRequestHandler):
                     case, record = confirm_value(case, role, field)
                     store.save_case(email_id, case, record)
                     corrections = {"role": role, "field": field}
+                elif choice == "reopen":
+                    if case.get("status") != "NEEDS_REVIEW" or store.list_decisions().get(email_id, {}).get("action") != "resolve":
+                        raise ValueError("Only a completed human review can be reopened")
                 elif choice not in {"confirm", "resolve"}:
                     raise ValueError("Unknown reviewer action")
                 decision = store.save_decision(
