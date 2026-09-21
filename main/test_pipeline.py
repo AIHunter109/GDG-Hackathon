@@ -22,6 +22,7 @@ from extractor import (
     validate_document_pair,
 )
 from review_actions import apply_correction, confirm_value, mark_equivalent
+from review_diagnostics import build_review_diagnostics
 
 from main import generate_submission, process_email
 
@@ -433,6 +434,32 @@ TOTAL Gross Weight (KG): 21,577 KG""")
 
             saved = raiser.showIssue()
             self.assertEqual(set(saved), set(email_ids))
+
+    def test_review_diagnostics_reports_false_reviews(self):
+        submission = {
+            "expected": {"status": "NEEDS_REVIEW", "review_reason": "unreadable"},
+            "extra": {"status": "NEEDS_REVIEW", "review_reason": "missing_attachment"},
+            "ok": {"status": "OK", "review_reason": None},
+        }
+        evidence = {
+            "expected": {
+                "internal_reason": "UNREADABLE_DOCUMENT",
+                "email": {"attachments": ["scan.pdf"]},
+            },
+            "extra": {
+                "internal_reason": "MISSING_SI_AND_BL",
+                "email": {"attachments": []},
+            },
+        }
+        truth = {
+            "expected": {"status": "NEEDS_REVIEW"},
+            "extra": {"status": "OK"},
+            "ok": {"status": "OK"},
+        }
+        report = build_review_diagnostics(submission, evidence, truth)
+        self.assertEqual(report["false_reviews"], 1)
+        self.assertEqual(report["missed_reviews"], 0)
+        self.assertEqual(report["by_internal_reason"], {"MISSING_SI_AND_BL": 1})
 
 
 if __name__ == "__main__":

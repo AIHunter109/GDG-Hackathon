@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import re
 import sys
 import uuid
@@ -310,7 +311,11 @@ def generate_submission(inbox, *, evidence_path=None, progress_every=50):
 
 def run():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", default=str(ROOT / "Bundle"))
+    parser.add_argument(
+        "--source",
+        default=os.getenv("INBOX_SOURCE", str(ROOT / "Bundle")),
+        help="Local bundle path or inbox server URL",
+    )
     parser.add_argument("--output", default=str(ROOT / "submission.json"))
     parser.add_argument("--evidence", default=str(ROOT / "evidence.json"))
     parser.add_argument(

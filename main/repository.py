@@ -6,8 +6,8 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from call_for_help import RaiseIssueToHuman
 from inbox import Inbox
+from call_for_help import RaiseIssueToHuman
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -18,11 +18,7 @@ def _stamp(case):
 
 
 def _read_json(path, default=None):
-    return (
-        json.loads(path.read_text(encoding="utf-8"))
-        if path.exists()
-        else (default if default is not None else {})
-    )
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else (default if default is not None else {})
 
 
 class LocalRepository:
@@ -49,9 +45,7 @@ class LocalRepository:
         return self.decisions.showIssue()
 
     def save_decision(self, email_id, action, note="", corrections=None):
-        return self.decisions.resolve(
-            email_id, action, note=note, corrections=corrections
-        )
+        return self.decisions.resolve(email_id, action, note=note, corrections=corrections)
 
     def save_case(self, email_id, case, submission):
         with self._lock:
@@ -60,16 +54,12 @@ class LocalRepository:
             cases[email_id] = _stamp(case)
             records[email_id] = submission
             self.evidence_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
-            self.submission_path.write_text(
-                json.dumps(records, indent=2), encoding="utf-8"
-            )
+            self.submission_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
 
     def save_processing(self, email_id, case, step="Retrying document verification"):
         with self._lock:
             cases = self.list_cases()
-            cases[email_id] = _stamp(
-                {**case, "status": "PROCESSING", "processing_step": step}
-            )
+            cases[email_id] = _stamp({**case, "status": "PROCESSING", "processing_step": step})
             self.evidence_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
 
 
@@ -78,22 +68,14 @@ class CloudRepository:
 
     def __init__(self):
         from google.cloud import firestore, storage
-
         self.db = firestore.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT") or None)
-        self.collection = self.db.collection(
-            os.getenv("FIRESTORE_COLLECTION", "shipping_cases")
-        )
-        self.bucket = storage.Client(
-            project=os.getenv("GOOGLE_CLOUD_PROJECT") or None
-        ).bucket(os.environ["GCS_BUCKET"])
+        self.collection = self.db.collection(os.getenv("FIRESTORE_COLLECTION", "shipping_cases"))
+        self.bucket = storage.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT") or None).bucket(os.environ["GCS_BUCKET"])
         self.inbox = self
 
     def list_cases(self):
-        return {
-            snapshot.id: snapshot.to_dict()["case"]
-            for snapshot in self.collection.stream()
-            if snapshot.to_dict() and "case" in snapshot.to_dict()
-        }
+        return {snapshot.id: snapshot.to_dict()["case"] for snapshot in self.collection.stream()
+                if snapshot.to_dict() and "case" in snapshot.to_dict()}
 
     def get_case(self, email_id):
         record = self.collection.document(email_id).get().to_dict()
@@ -111,11 +93,8 @@ class CloudRepository:
         return self.get_email(email_id)
 
     def emails(self):
-        return [
-            snapshot.to_dict()["email"]
-            for snapshot in self.collection.stream()
-            if snapshot.to_dict() and "email" in snapshot.to_dict()
-        ]
+        return [snapshot.to_dict()["email"] for snapshot in self.collection.stream()
+                if snapshot.to_dict() and "email" in snapshot.to_dict()]
 
     def __iter__(self):
         return iter(self.emails())
@@ -126,23 +105,13 @@ class CloudRepository:
         return self.bucket.blob(path).download_as_bytes()
 
     def list_decisions(self):
-        return {
-            snapshot.id: snapshot.to_dict()["decision"]
-            for snapshot in self.collection.stream()
-            if snapshot.to_dict() and "decision" in snapshot.to_dict()
-        }
+        return {snapshot.id: snapshot.to_dict()["decision"] for snapshot in self.collection.stream()
+                if snapshot.to_dict() and "decision" in snapshot.to_dict()}
 
     def save_decision(self, email_id, action, note="", corrections=None):
         from datetime import datetime, timezone
-
-        if action not in {
-            "confirm",
-            "confirm_value",
-            "correct",
-            "mark_equivalent",
-            "resolve",
-            "select_document",
-        }:
+        if action not in {"confirm", "confirm_value", "correct", "mark_equivalent",
+                          "reopen", "resolve", "select_document"}:
             raise ValueError("Unknown reviewer action")
         decision = {
             "action": action,
@@ -154,9 +123,7 @@ class CloudRepository:
         return decision
 
     def save_case(self, email_id, case, submission):
-        self.collection.document(email_id).set(
-            {"case": _stamp(case), "submission": submission}, merge=True
-        )
+        self.collection.document(email_id).set({"case": _stamp(case), "submission": submission}, merge=True)
 
     def save_processing(self, email_id, case, step="Retrying document verification"):
         processing = _stamp({**case, "status": "PROCESSING", "processing_step": step})
