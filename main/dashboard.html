@@ -1042,29 +1042,37 @@
             function populateStatusFilter(preferred = "all") {
                 const select = $("status-filter"),
                     category = $("category-filter").value;
+                const sourceCases = Object.entries(state.cases).filter(([id, c]) =>
+                    !(state.features.cloud_mode && state.features.new_case_ids?.includes(id)) &&
+                    (category === "all" || c.category === category));
+                const appendAvailableOptions = (group, options) => {
+                    for (const [value, label] of options) {
+                        const count = sourceCases.filter(([id, c]) => statusMatches(id, c, value)).length;
+                        if (!count) continue;
+                        const optionNode = node("option", `${label} (${count})`);
+                        optionNode.value = value;
+                        group.append(optionNode);
+                    }
+                    if (group.children.length) select.append(group);
+                };
                 select.replaceChildren();
-                const all = node("option", "All statuses");
+                const all = node("option", `All statuses (${sourceCases.length})`);
                 all.value = "all";
                 select.append(all);
                 if (category === "all") {
                     const group = node("optgroup");
                     group.label = "Overview";
-                    [
+                    appendAvailableOptions(group, [
                         ["CATEGORY_PENDING", "Open category work"],
                         ["CATEGORY_COMPLETED", "Completed category work"],
                         ["OK", "No mismatch detected"],
                         ["MISMATCH", "Mismatch detected"],
                         ["NEEDS_REVIEW", "Human review required"],
-                    ].forEach(([value, label]) => {
-                        const optionNode = node("option", label);
-                        optionNode.value = value;
-                        group.append(optionNode);
-                    });
-                    select.append(group);
+                    ]);
                 } else if (category === "BL_COMPARISON") {
                     const group = node("optgroup");
                     group.label = "Document comparison";
-                    [
+                    appendAvailableOptions(group, [
                         ["PROCESSING", "Processing"],
                         ["OK", "No mismatch detected"],
                         ["MISMATCH", "Mismatch detected"],
@@ -1072,26 +1080,25 @@
                         ["RESOLVED_REVIEW", "Human review completed"],
                         ["PROCESSING_FAILED", "Processing failed"],
                         ["NOT_APPLICABLE", "Awaiting comparison documents"],
-                    ].forEach(([value, label]) => {
-                        const optionNode = node("option", label);
-                        optionNode.value = value;
-                        group.append(optionNode);
-                    });
-                    select.append(group);
+                    ]);
                 }
                 for (const [workflowCategory, config] of Object.entries(CATEGORY_WORKFLOW)) {
                     if (category !== workflowCategory) continue;
                     const group = node("optgroup");
                     group.label = config.title;
-                    for (const [workflowState, details] of Object.entries(config.states)) {
-                        const optionNode = node("option", details[0]);
-                        optionNode.value = `WORKFLOW:${workflowCategory}:${workflowState}`;
-                        group.append(optionNode);
-                    }
-                    select.append(group);
+                    appendAvailableOptions(group, Object.entries(config.states).map(([workflowState, details]) =>
+                        [`WORKFLOW:${workflowCategory}:${workflowState}`, details[0]]));
                 }
                 select.value = Array.from(select.options).some((optionNode) => optionNode.value === preferred)
                     ? preferred : "all";
+            }
+            function statusMatches(id, c, status) {
+                if (status === "all") return true;
+                const workflowParts = status.startsWith("WORKFLOW:") ? status.split(":") : null;
+                if (workflowParts)
+                    return c.category === workflowParts[1] && categoryWorkflowState(c) === workflowParts[2];
+                if (status === "NEEDS_REVIEW") return unresolved(id, c);
+                return status === resultKey(c);
             }
             function applySummaryFilter(key, { category = "all", status = "all", reason = null } = {}) {
                 state.summaryFilter = key;
@@ -1201,14 +1208,8 @@
                         state.features.new_case_ids?.includes(id)
                     )
                         return false;
-                    const e = c.email || {},
-                        key = resultKey(c);
-                    const workflowParts = status.startsWith("WORKFLOW:") ? status.split(":") : null;
-                    const statusMatch = workflowParts
-                        ? c.category === workflowParts[1] && categoryWorkflowState(c) === workflowParts[2]
-                        : status === "all" ||
-                          (status === "NEEDS_REVIEW" && unresolved(id, c)) ||
-                          status === key;
+                    const e = c.email || {};
+                    const statusMatch = statusMatches(id, c, status);
                     const reasonCode = ["wrong_doc_type", "missing_attachment", "unreadable", "missing_value"].includes(c.review_reason)
                         ? c.review_reason : "other";
                     return (
@@ -1401,6 +1402,7 @@
                 try {
                     const data = await request("/api/cases");
                     Object.assign(state, data);
+                    populateStatusFilter($("status-filter").value);
                     $("deployment-state").textContent =
                         "Shipping operations · " +
                         (window.SPARK_MODE
@@ -2256,8 +2258,10 @@
                 if (index >= 0) preview(c.email_id, index, path, details);
             }
             async function refresh() {
+                const preferredStatus = $("status-filter").value;
                 const data = await request("/api/cases");
                 Object.assign(state, data);
+                populateStatusFilter(preferredStatus);
                 render();
                 if (state.page === "case") await fetchEmail(state.selected);
             }
