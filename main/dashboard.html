@@ -848,6 +848,41 @@
                         .replace(/\b\w/g, (c) => c.toUpperCase()) || "—"
                 );
             }
+            function inferredCategoryWorkflowState(c) {
+                const email = c.email || {};
+                const subject = String(email.subject || "").toLowerCase();
+                const body = String(email.body || "").toLowerCase();
+                const text = `${subject}\n${body}`;
+                if (c.category === "SI_REQUEST") {
+                    if (/\b(request si|si needed)\b/.test(subject))
+                        return "needs_response";
+                    const fieldSignals = ["shipper", "consignee", "notify", "pol:", "pod:", "container", "gross weight"]
+                        .filter((signal) => body.includes(signal)).length;
+                    if (fieldSignals >= 5 && !/\b(missing|awaiting|pending details|please provide)\b/.test(body))
+                        return "ready_to_prepare";
+                    if (/\b(missing|awaiting|pending details|please provide|information needed)\b/.test(text))
+                        return "waiting_for_information";
+                    return "needs_response";
+                }
+                if (c.category === "INVOICE_QUERY") {
+                    if (/\b(still missing|awaiting|pending|not received|follow[ -]?up)\b/.test(text))
+                        return "waiting_for_finance";
+                    return "needs_review";
+                }
+                if (c.category === "GENERAL") {
+                    if (/\b(completed successfully|wishing everyone|office resumes|for your information|fyi)\b/.test(text))
+                        return "completed";
+                    if (/\b(outstanding|pending items?|reminder|documents? to follow|awaiting)\b/.test(text))
+                        return "waiting_for_response";
+                    return "needs_review";
+                }
+                if (c.category === "SPAM") {
+                    if (/https?:\/\/|\b(won|winner|gift card|guaranteed|verify your account|unpaid customs fee)\b/.test(text))
+                        return "confirmed_spam";
+                    return "needs_review";
+                }
+                return CATEGORY_WORKFLOW[c.category]?.defaultState || null;
+            }
             function categoryWorkflowState(c) {
                 const config = CATEGORY_WORKFLOW[c.category],
                     decision = state.decisions[c.email_id];
@@ -856,7 +891,7 @@
                 if (decision?.action === "update_category_workflow" &&
                     config.states[decision.corrections?.workflow_state])
                     return decision.corrections.workflow_state;
-                return config.defaultState;
+                return inferredCategoryWorkflowState(c);
             }
             function categoryWorkflowInfo(c) {
                 const config = CATEGORY_WORKFLOW[c.category],
