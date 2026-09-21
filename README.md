@@ -18,8 +18,8 @@ The seven verified fields are:
 - **Category workflows:** SI requests can move through response required, waiting for information, ready to prepare, response sent, and completed. Invoice queries support review, finance routing, waiting, response sent, and completion. General email supports review, forwarding, waiting, response sent, and completion. Spam can be reviewed, confirmed, restored to the inbox, archived, or completed.
 - **Document processing:** reads TXT, XLSX, DOCX, and PDF in the Python pipeline. Native extraction runs first; Gemini is used only for uncertain intent, ambiguous document roles, unfamiliar labels, image-only PDFs, requested review explanations, and optional correction-email wording.
 - **Deterministic verification:** normalizes the seven fields, checks shipment identifiers and document totals, then reports no mismatch, mismatch, human review, processing, or processing failure. AI does not make the final comparison decision.
-- **Reviewer workspace:** centers the main workflow on verifying documents and reviewing exceptions. Four operational totals, concise validation evidence, verification outcomes, human-review reasons, filters, the original email dataset, and new-submission history remain visible without turning the workspace into a generic analytics page.
-- **Validation results:** presents a small set of dataset-specific results: emails evaluated, expected reviews identified, missed reviews, and field-extraction coverage. Technical precision and recall remain in the scorer output and documentation instead of dominating the dashboard.
+- **Reviewer workspace:** centers the main workflow on verifying documents and reviewing exceptions. One combined dataset and verification overview, verification outcomes, human-review reasons, filters, the original email dataset, and new-submission history remain visible without turning the workspace into a generic analytics page.
+- **Validation evidence:** the combined overview shows review detection and field coverage once, while its note records missed reviews, validation context, and accuracy limits. Technical precision and recall remain in the scorer output and documentation instead of dominating the dashboard.
 - **Interactive review views:** operational totals, verification outcomes, and human-review reason cards filter the email table so reviewers can move directly from a count to the affected cases.
 - **Email filtering:** supports search, category, status, and real-timestamp date filters for Today, Last 7 Days, Last 30 Days, All Time, and a custom range. The interface does not manufacture Daily/Weekly/Monthly trends from the seeded snapshot.
 - **Case Detail:** makes the seven-field SI and draft BL comparison and discrepancy count the main result, with source evidence, normalized values, processing methods, validation results, and reviewer actions together.
@@ -168,6 +168,19 @@ To inspect why cases enter review, generate a diagnostic report. Supplying groun
 ```
 
 The current 520-email evaluation produces 20 reviews for 20 expected cases: five wrong-document cases, five missing-attachment cases, five unreadable cases, and five missing-value cases. It reports zero false reviews and zero missed reviews while retaining 100% category accuracy and exact mismatch results against the included ground truth. These figures are specific to the supplied validation dataset and are not presented as guaranteed performance on unseen production data.
+
+### Planned next improvements
+
+The current prototype covers the core verification workflow. These additions are planned to strengthen traceability, practical use, and reviewer confidence without changing the deterministic verification approach:
+
+- **Downloadable verification report:** generate a human-readable case report containing the email or shipment reference, seven-field comparison, discrepancies, reviewer status, and final decision. JSON remains the competition output.
+- **Field-level evidence and provenance:** show each extracted value's document, page when available, extraction method, and supporting source text. AI-derived values remain evidence checked and enter human review when uncertain.
+- **Case activity history:** record classification, document-role detection, extraction, mismatch detection, reviewer corrections, re-verification, review completion, and correction-draft creation without modifying the original source.
+- **Batch result summary:** show processed pairs, no-mismatch cases, mismatches, human-review cases, and failures after a batch, with links to affected cases and an optional downloadable handover summary.
+- **Reviewer feedback capture:** record whether a result was accepted or corrected and whether the issue involved classification, extraction, comparison, or another cause. Feedback is not presented as model accuracy without independently labelled evaluation data.
+- **Optional reviewer assignment:** add ownership, priority, and due status in a later multi-user version. This is a scalability enhancement for the current owner-restricted demo.
+
+These items are planned and must not be described as implemented until they are available and tested in the prototype.
 
 ### Demo highlights
 
