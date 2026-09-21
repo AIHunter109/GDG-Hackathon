@@ -649,7 +649,7 @@
                                 <option value="NEEDS_REVIEW">Human review required</option>
                                 <option value="RESOLVED_REVIEW">Human review completed</option>
                                 <option value="PROCESSING_FAILED">Processing failed</option>
-                                <option value="NOT_APPLICABLE">Not applicable</option>
+                                <option value="NOT_APPLICABLE">No SI/BL comparison required</option>
                             </select>
                         </label>
                         <label class="filter-field">Date
@@ -676,7 +676,7 @@
                                 <tr>
                                     <th>Subject and sender</th>
                                     <th>Category</th>
-                                    <th>Verification status</th>
+                                    <th>SI/BL verification status</th>
                                     <th>Attachments</th>
                                     <th>Updated</th>
                                     <th>Action</th>
@@ -698,7 +698,7 @@
                                 <tr>
                                     <th>Subject and sender</th>
                                     <th>Category</th>
-                                    <th>Verification status</th>
+                                    <th>SI/BL verification status</th>
                                     <th>Attachments</th>
                                     <th>Updated</th>
                                     <th>Action</th>
@@ -735,7 +735,7 @@
                 NEEDS_REVIEW: "Human review required",
                 PROCESSING_FAILED: "Processing failed",
                 PROCESSING: "Processing",
-                NOT_APPLICABLE: "Not applicable",
+                NOT_APPLICABLE: "No SI/BL comparison required",
             };
             const $ = (id) => document.getElementById(id);
             const node = (tag, text = "", className = "") => {
@@ -798,7 +798,7 @@
             }
             function resultLabel(c) {
                 return c.category !== "BL_COMPARISON"
-                    ? "Not applicable"
+                    ? "No SI/BL comparison required"
                     : c.status === "NEEDS_REVIEW" &&
                         state.decisions[c.email_id]?.action === "resolve"
                       ? "Human review completed"

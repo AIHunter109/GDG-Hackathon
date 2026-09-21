@@ -38,7 +38,7 @@ The seven verified fields are:
 - **Human review completed:** A reviewer resolved the case. It can be reopened from Case Detail.
 - **Processing:** Verification or reanalysis is running.
 - **Processing failed:** A technical step failed and can be retried.
-- **Not applicable:** The email is unrelated to SI/BL comparison or is a draft-request thread still waiting for comparison documents.
+- **No SI/BL comparison required:** The email was classified successfully, but it is spam, an SI request, an invoice query, a general email, or a draft-request thread without an actionable SI and draft BL pair. Its category remains visible in the Category column.
 
 ### Implementations
 
