@@ -54,7 +54,6 @@ class RaiseIssueToHuman:
             "confirm_value",
             "correct",
             "mark_equivalent",
-
             "resolve",
             "reopen",
             "select_document",
@@ -70,21 +69,36 @@ class RaiseIssueToHuman:
             raise ValueError("Corrections are required for the correct action")
         with self._lock:
             decisions = self._read()
-            previous_entry = decisions.get(email_id)
-            history = (previous_entry or {}).get("history", [])
-            if previous_entry is not None:
+            existing = decisions.get(email_id, {})
+            updated_at = datetime.now(timezone.utc).isoformat()
+            event = {
+                "action": action,
+                "note": note,
+                "details": corrections or {},
+                "at": updated_at,
+            }
+            history = existing.get("history", [])
+            if existing:
                 # Keep every prior decision as an immutable audit trail entry
                 # rather than silently overwriting it.
                 history = [
                     *history,
-                    {k: v for k, v in previous_entry.items() if k != "history"},
+                    {key: value for key, value in existing.items() if key != "history"},
                 ]
-            decisions[email_id] = {
-                "action": action,
-                "note": note,
-                "corrections": corrections or {},
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+            decision = {
+                **existing,
+                "updated_at": updated_at,
+                "activity": [*existing.get("activity", []), event][-100:],
                 "history": history,
             }
+            if action == "update_assignment":
+                decision["assignment"] = corrections or {}
+            elif action == "reviewer_feedback":
+                decision["feedback"] = corrections or {}
+            else:
+                decision.update(
+                    {"action": action, "note": note, "corrections": corrections or {}}
+                )
+            decisions[email_id] = decision
             self.path.write_text(json.dumps(decisions, indent=2), encoding="utf-8")
-            return decisions[email_id]
+            return decision

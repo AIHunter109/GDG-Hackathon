@@ -275,13 +275,12 @@ class Handler(BaseHTTPRequestHandler):
                     store.save_case(email_id, case, record)
                     corrections = {"role": role, "field": field}
                 elif choice == "reopen":
-                    if (
-                        case.get("status") != "NEEDS_REVIEW"
-                        or store.list_decisions().get(email_id, {}).get("action")
-                        != "resolve"
-                    ):
+                    previous_action = (
+                        store.list_decisions().get(email_id, {}).get("action")
+                    )
+                    if previous_action not in {None, "resolve"}:
                         raise ValueError(
-                            "Only a completed human review can be reopened"
+                            "Only an unresolved or completed human review can be reopened"
                         )
                 elif choice == "complete_category":
                     if case.get("category") == "BL_COMPARISON":
