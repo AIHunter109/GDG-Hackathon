@@ -237,7 +237,16 @@ export function mountBatchUploader({ container, ready, originalIds, hasRecord, p
     if (runResults.length) {
       const summary = get("#batch-result-summary");
       summary.classList.remove("hidden");
-      summary.textContent = `${runResults.length} processed · ${totals.OK || 0} no mismatch · ${totals.MISMATCH || 0} mismatch · ${totals.NEEDS_REVIEW || 0} human review · ${totals.PROCESSING_FAILED || 0} failed.`;
+      const links = element("div", "", "actions");
+      for (const item of runResults) {
+        const link = element("a", `Open ${item.key}`, "small-btn");
+        link.href = `#case/${encodeURIComponent(item.id)}`;
+        links.append(link);
+      }
+      summary.replaceChildren(
+        element("strong", `${runResults.length} processed · ${totals.OK || 0} no mismatch · ${totals.MISMATCH || 0} mismatch · ${totals.NEEDS_REVIEW || 0} human review · ${totals.PROCESSING_FAILED || 0} failed.`),
+        links,
+      );
       get("#batch-download-summary").classList.remove("hidden");
     }
     if (saved) onSaved();
