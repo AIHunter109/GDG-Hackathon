@@ -1,5 +1,6 @@
 {
   "dataset": "Included 520-email evaluation set",
+  "emails_evaluated": 520,
   "verified_at": "2026-09-21",
   "classification_accuracy": 1.0,
   "classification_macro_f1": 1.0,

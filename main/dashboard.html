@@ -111,47 +111,13 @@
             .performance-metrics {
                 margin-bottom: 10px;
             }
-            .trend-legend {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 12px;
-                margin: 8px 0 14px;
-                color: #597384;
-                font-size: 12px;
-            }
-            .trend-key::before {
-                content: "";
-                display: inline-block;
-                width: 10px;
-                height: 10px;
-                margin-right: 5px;
-                border-radius: 2px;
-                background: var(--key-color);
-            }
-            .trend-chart {
+            .summary-grid {
                 display: grid;
-                gap: 10px;
-                overflow-x: auto;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
             }
-            .trend-row {
-                display: grid;
-                grid-template-columns: 95px minmax(500px, 1fr);
-                align-items: center;
-                gap: 10px;
-            }
-            .trend-label {
-                color: #597384;
-                font-size: 12px;
-                text-align: right;
-            }
-            .trend-bars {
-                display: grid;
-                gap: 3px;
-            }
-            .trend-bar {
-                min-width: 2px;
-                height: 7px;
-                border-radius: 4px;
+            .summary-grid .metrics {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
             .card-head {
                 display: flex;
@@ -536,6 +502,9 @@
                 .case-summary dl {
                     grid-template-columns: repeat(2, 1fr);
                 }
+                .summary-grid {
+                    grid-template-columns: 1fr;
+                }
             }
             @media (max-width: 700px) {
                 .shell {
@@ -586,32 +555,24 @@
                 ></div>
                 <section class="card" id="performance-card">
                     <div class="card-head">
-                        <h2>System Performance and Reliability</h2>
-                        <span class="muted">Validated measures</span>
+                        <h2>Validation Results</h2>
+                        <span class="muted">Provided dataset</span>
                     </div>
                     <div id="performance-metrics" class="metrics performance-metrics"></div>
                     <p id="performance-note" class="muted"></p>
                 </section>
-                <section class="card">
-                    <div class="card-head">
-                        <h2>Email processing trends</h2>
-                        <label class="filter-field">Group by
-                            <select id="trend-granularity">
-                                <option value="day">Daily</option>
-                                <option value="week">Weekly</option>
-                                <option value="month">Monthly</option>
-                            </select>
-                        </label>
-                    </div>
-                    <div class="trend-legend">
-                        <span class="trend-key" style="--key-color:#16879a">Processed emails</span>
-                        <span class="trend-key" style="--key-color:#d18c37">Mismatches</span>
-                        <span class="trend-key" style="--key-color:#c45b53">Human review</span>
-                        <span class="trend-key" style="--key-color:#7946a3">Processing failures</span>
-                    </div>
-                    <div id="trend-chart" class="trend-chart"></div>
-                    <p id="trend-note" class="muted"></p>
-                </section>
+                <div class="summary-grid">
+                    <section class="card">
+                        <div class="card-head"><h2>Case Distribution</h2></div>
+                        <div id="case-distribution" class="metrics performance-metrics"></div>
+                        <p class="muted">Current cases grouped by operational outcome.</p>
+                    </section>
+                    <section class="card">
+                        <div class="card-head"><h2>Human Review Reasons</h2></div>
+                        <div id="review-reasons" class="metrics performance-metrics"></div>
+                        <p class="muted">Current unresolved reviews grouped by the reason manual action is required.</p>
+                    </section>
+                </div>
                 <section class="card">
                     <div class="card-head">
                         <h2>Emails</h2>
@@ -974,67 +935,44 @@
                 }
                 return time >= start.getTime() && time <= end.getTime();
             }
-            function trendBucket(time, granularity) {
-                const date = new Date(time);
-                if (granularity === "week") {
-                    const day = (date.getDay() + 6) % 7;
-                    date.setDate(date.getDate() - day);
-                }
-                const year = date.getFullYear(), month = String(date.getMonth() + 1).padStart(2, "0");
-                if (granularity === "month") return `${year}-${month}`;
-                return `${year}-${month}-${String(date.getDate()).padStart(2, "0")}`;
-            }
             function renderPerformance() {
                 const verified = state.features.verified_performance;
                 const m = state.metrics;
-                const values = [
+                const values = verified ? [
+                    metric("Emails evaluated", verified.emails_evaluated),
+                    metric("Expected reviews identified", `${verified.expected_reviews - verified.missed_reviews} / ${verified.expected_reviews}`),
+                    metric("Missed reviews", verified.missed_reviews),
+                    metric("Unnecessary reviews", verified.false_reviews),
                     metric("Field extraction coverage", percentage(m.field_extraction_coverage)),
-                    metric("Human review rate", percentage(m.human_review_rate)),
-                    metric("Processing failure rate", percentage(m.processing_failure_rate)),
+                    metric("Processing failures", m.processing_failures || 0),
+                ] : [
+                    metric("Emails loaded", m.total || 0),
+                    metric("Field extraction coverage", percentage(m.field_extraction_coverage)),
+                    metric("Processing failures", m.processing_failures || 0),
                 ];
-                if (verified) values.unshift(
-                    metric("Classification accuracy", percentage(verified.classification_accuracy)),
-                    metric("Mismatch precision / recall", `${percentage(verified.mismatch_precision)} / ${percentage(verified.mismatch_recall)}`),
-                    metric("Expected / predicted reviews", `${verified.expected_reviews} / ${verified.predicted_reviews}`),
-                );
                 $("performance-metrics").replaceChildren(...values);
                 $("performance-note").textContent = verified
-                    ? `${verified.dataset}; verified ${verified.verified_at}. False reviews: ${verified.false_reviews}; missed reviews: ${verified.missed_reviews}. Coverage and operational rates are calculated from the currently loaded cases. Metrics are kept separate because they measure different tasks.`
-                    : "Ground-truth accuracy measures are unavailable. Coverage and operational rates are calculated from the currently loaded cases; no overall accuracy is inferred.";
+                    ? `${verified.dataset}; verified ${verified.verified_at}. Classification accuracy and mismatch precision/recall were ${percentage(verified.classification_accuracy)} on this validation set. These results are dataset-specific evidence, not guaranteed performance on unseen production data. Coverage and failures are calculated from the currently loaded cases.`
+                    : "Ground-truth validation results are unavailable. Coverage and failures are calculated from the currently loaded cases; no accuracy is inferred.";
             }
-            function renderTrends() {
-                const granularity = $("trend-granularity").value;
-                const groups = new Map();
-                let undated = 0;
-                for (const [id, c] of Object.entries(state.cases)) {
-                    if (!dateMatches(c)) continue;
-                    const time = caseTimestamp(c);
-                    if (time == null) { undated += 1; continue; }
-                    const key = trendBucket(time, granularity);
-                    const item = groups.get(key) || { processed: 0, mismatch: 0, review: 0, failed: 0 };
-                    item.processed += 1;
-                    if (c.status === "MISMATCH") item.mismatch += 1;
-                    if (unresolved(id, c)) item.review += 1;
-                    if (c.status === "PROCESSING_FAILED") item.failed += 1;
-                    groups.set(key, item);
+            function renderCaseSummaries() {
+                const cases = Object.entries(state.cases);
+                const distribution = {
+                    "No mismatch": cases.filter(([, c]) => c.category === "BL_COMPARISON" && c.status === "OK").length,
+                    "Mismatch": cases.filter(([, c]) => c.status === "MISMATCH").length,
+                    "Human review": cases.filter(([, c]) => c.status === "NEEDS_REVIEW").length,
+                    "Not applicable": cases.filter(([, c]) => c.category !== "BL_COMPARISON" || c.status === "NOT_APPLICABLE").length,
+                };
+                $("case-distribution").replaceChildren(...Object.entries(distribution).map(([name, count]) => metric(name, count)));
+                const labels = { wrong_doc_type: "Wrong document", missing_attachment: "Missing attachment",
+                    unreadable: "Unreadable document", missing_value: "Missing value" };
+                const reasons = {};
+                for (const [, c] of cases) if (c.status === "NEEDS_REVIEW") {
+                    const reason = labels[c.review_reason] || "Other";
+                    reasons[reason] = (reasons[reason] || 0) + 1;
                 }
-                const entries = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-                const maximum = Math.max(1, ...entries.flatMap(([, item]) => Object.values(item)));
-                const colors = { processed: "#16879a", mismatch: "#d18c37", review: "#c45b53", failed: "#7946a3" };
-                $("trend-chart").replaceChildren(...entries.map(([label, item]) => {
-                    const bars = node("div", "", "trend-bars");
-                    for (const [name, count] of Object.entries(item)) {
-                        const bar = node("div", "", "trend-bar");
-                        bar.style.width = `${Math.max(count ? 1 : 0, count / maximum * 100)}%`;
-                        bar.style.background = colors[name];
-                        bar.title = `${name}: ${count}`;
-                        bars.append(bar);
-                    }
-                    return add(node("div", "", "trend-row"), node("span", label, "trend-label"), bars);
-                }));
-                $("trend-note").textContent = entries.length
-                    ? `${entries.length} ${granularity === "day" ? "daily" : granularity === "week" ? "weekly" : "monthly"} period${entries.length === 1 ? "" : "s"}. ${undated ? undated + " undated record(s) excluded." : "All displayed records have a real email or processing timestamp."}`
-                    : `No timestamped records match this date range.${undated ? " " + undated + " undated record(s) were excluded." : ""}`;
+                $("review-reasons").replaceChildren(...Object.entries(reasons).map(([name, count]) => metric(name, count)));
+                if (!Object.keys(reasons).length) $("review-reasons").append(metric("No active reviews", 0));
             }
             function visibleCases() {
                 const search = $("search").value.toLowerCase(),
@@ -1113,7 +1051,7 @@
                     metric("Processing", m.processing || 0),
                 );
                 renderPerformance();
-                renderTrends();
+                renderCaseSummaries();
                 const entries = visibleCases();
                 $("case-count").textContent =
                     entries.length + " of " + (m.total || 0) + " emails";
@@ -2086,7 +2024,6 @@
             };
             $("date-from").onchange = renderDashboard;
             $("date-to").onchange = renderDashboard;
-            $("trend-granularity").onchange = renderTrends;
             $("clear-filters").onclick = () => {
                 $("search").value = "";
                 $("category-filter").value = "all";
