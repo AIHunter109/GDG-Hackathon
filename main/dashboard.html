@@ -125,6 +125,9 @@
             .performance-metrics {
                 margin-bottom: 10px;
             }
+            #overview-card .metrics {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
             .summary-grid {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
@@ -539,6 +542,9 @@
                 .metrics {
                     grid-template-columns: repeat(3, 1fr);
                 }
+                #overview-card .metrics {
+                    grid-template-columns: repeat(3, 1fr);
+                }
                 .case-summary dl {
                     grid-template-columns: repeat(2, 1fr);
                 }
@@ -551,6 +557,9 @@
                     padding: 14px;
                 }
                 .metrics {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+                #overview-card .metrics {
                     grid-template-columns: repeat(2, 1fr);
                 }
                 header {
@@ -602,17 +611,12 @@
                     <span id="gemini-status" class="status-item">Gemini unavailable</span>
                 </div>
                 <div id="new-email-form-slot"></div>
-                <div
-                    id="metrics"
-                    class="metrics"
-                    aria-label="Email summary"
-                ></div>
-                <section class="card" id="performance-card">
+                <section class="card" id="overview-card">
                     <div class="card-head">
-                        <h2>Validation Results</h2>
+                        <h2>Dataset and Verification Overview</h2>
                         <span class="muted">Provided dataset</span>
                     </div>
-                    <div id="performance-metrics" class="metrics performance-metrics"></div>
+                    <div id="metrics" class="metrics performance-metrics" aria-label="Dataset and verification summary"></div>
                     <p id="performance-note" class="muted"></p>
                 </section>
                 <div class="summary-grid">
@@ -1177,23 +1181,6 @@
                 }
                 return time >= start.getTime() && time <= end.getTime();
             }
-            function renderPerformance() {
-                const verified = state.features.verified_performance;
-                const m = state.metrics;
-                const values = verified ? [
-                    metric("Emails evaluated", verified.emails_evaluated),
-                    metric("Expected reviews identified", `${verified.expected_reviews - verified.missed_reviews} / ${verified.expected_reviews}`),
-                    metric("Missed reviews", verified.missed_reviews),
-                    metric("Field extraction coverage", percentage(m.field_extraction_coverage)),
-                ] : [
-                    metric("Emails loaded", m.total || 0),
-                    metric("Field extraction coverage", percentage(m.field_extraction_coverage)),
-                ];
-                $("performance-metrics").replaceChildren(...values);
-                $("performance-note").textContent = verified
-                    ? `${verified.dataset}; verified ${verified.verified_at}. Classification accuracy and mismatch precision/recall were ${percentage(verified.classification_accuracy)} on this validation set. These results are dataset-specific evidence, not guaranteed performance on unseen production data. Coverage is calculated from the currently loaded cases and measures whether required values were found, not whether every extracted value is accurate.`
-                    : "Ground-truth validation results are unavailable. Coverage is calculated from the currently loaded cases and does not imply extraction accuracy.";
-            }
             function renderCaseSummaries() {
                 const newIds = new Set(state.features.new_case_ids || []);
                 const cases = Object.entries(state.cases).filter(([id]) => !newIds.has(id));
@@ -1316,13 +1303,23 @@
                     }
                     $("new-email-table").replaceChildren(...historyRows);
                 }
-                $("metrics").replaceChildren(
+                const verified = state.features.verified_performance;
+                const overviewMetrics = [
                     filterMetric("Total Emails", m.total || 0, "summary:total", {}),
                     filterMetric("Document Checks", m.comparison_requests || 0, "summary:checks", { category: "BL_COMPARISON" }),
                     filterMetric("Mismatches Detected", m.mismatches || 0, "summary:mismatch", { status: "MISMATCH" }),
                     filterMetric("Human Review Required", m.human_review || 0, "summary:review", { status: "NEEDS_REVIEW" }),
-                );
-                renderPerformance();
+                ];
+                if (verified)
+                    overviewMetrics.push(
+                        metric("Review Detection", `${verified.expected_reviews - verified.missed_reviews} / ${verified.expected_reviews}`),
+                        metric("Field Coverage", percentage(m.field_extraction_coverage)),
+                    );
+                else overviewMetrics.push(metric("Field Coverage", percentage(m.field_extraction_coverage)));
+                $("metrics").replaceChildren(...overviewMetrics);
+                $("performance-note").textContent = verified
+                    ? `${verified.dataset}; verified ${verified.verified_at}. ${verified.missed_reviews} expected reviews missed. Classification accuracy and mismatch precision/recall were ${percentage(verified.classification_accuracy)} on this validation set. These results are dataset-specific evidence, not guaranteed performance on unseen production data. Coverage measures whether required values were found, not whether every extracted value is accurate.`
+                    : "Ground-truth validation results are unavailable. Coverage is calculated from the currently loaded cases and does not imply extraction accuracy.";
                 renderCaseSummaries();
                 const entries = visibleCases();
                 $("case-count").textContent =

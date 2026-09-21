@@ -109,16 +109,18 @@ TXT, XLSX, and DOCX extraction use the Python standard library. Selectable PDF t
 
 Open `http://127.0.0.1:8765`. The Dashboard is an operational verification workspace. The heading states the product purpose and exposes **Verify documents** and **Review exceptions** as the two primary actions. A compact status strip reports whether the dataset is loaded, Firestore is connected, and Gemini assistance is available.
 
-The first summary row contains four operational counts:
+One **Dataset and Verification Overview** combines operational totals and validation evidence without repeating the email count:
 
 - **Total emails**
 - **Document checks**
 - **Mismatches detected**
 - **Human review required**
+- **Review detection** against the supplied ground truth
+- **Field coverage**
 
 Selecting a summary card filters the email table to the related records. `Processing` remains a case status while work is running and is not a permanent headline card. The hosted **Verify documents** workflow appears near the top because SI/BL verification is the core task. Its stages are reading the email and attachments, identifying the SI and draft BL, extracting the seven fields, validating identifiers and totals, comparing normalized values, and returning no mismatch, mismatch, or human review.
 
-The concise **Validation Results** section shows emails evaluated, expected review cases identified, missed reviews, and field-extraction coverage. Classification accuracy and mismatch precision or recall remain available in the scorer output and explanatory note. Results are explicitly labelled as evidence from the supplied validation dataset, not guaranteed performance on unseen production data. Coverage measures whether required values were found and is not described as extraction accuracy.
+The first four cards filter the email table. The overview note reports missed expected reviews, the verification date, classification accuracy, mismatch precision or recall, and the limits of the supplied dataset. Results are explicitly labelled as validation evidence, not guaranteed performance on unseen production data. Coverage measures whether required values were found and is not described as extraction accuracy.
 
 The **Verification Overview** focuses on document checks: verified with no mismatch, mismatch detected, and human review required. **Other Email Workflows** shows SI requests, invoice queries, general messages, and spam with their pending workload; selecting a card opens that queue. **Human Review Reasons** groups unresolved document cases into wrong document, missing attachment, missing value, unreadable document, or other.
 
