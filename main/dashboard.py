@@ -5,7 +5,10 @@ import logging
 import mimetypes
 import os
 import sys
+import threading
+import time
 from collections import Counter
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -256,13 +259,6 @@ class Handler(BaseHTTPRequestHandler):
                         "source": "AI" if suggestion else "Template",
                     },
                 )
-            if action == "explain":
-                explanation = AIService().explain_review(case)
-                if not explanation:
-                    raise ValueError(
-                        "AI explanation is unavailable; review the source evidence shown in this case"
-                    )
-                return self._send(200, explanation)
             if action == "retry":
                 vision = payload.get("vision") is True
                 if vision and not AIService().enabled:
@@ -332,6 +328,71 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, {"error": str(exc)})
 
 
+AI_REVIEW_MAX_ATTEMPTS = 3
+AI_REVIEW_SCAN_INTERVAL = 5
+AI_REVIEW_CASE_PAUSE = 1
+
+
+def _needs_ai_review(case, decisions, email_id):
+    """Whether the background worker should (re)generate an AI opinion for
+    this case. Regenerates whenever the case has changed since the last
+    report (a retry or correction moved `updated_at`), skips cases a
+    reviewer already resolved, and bounds retries on genuine failures so a
+    persistently broken case doesn't get hammered forever."""
+    if case.get("status") != "NEEDS_REVIEW":
+        return False
+    if decisions.get(email_id, {}).get("action") == "resolve":
+        return False
+    review = case.get("ai_review") or {}
+    if review.get("checked_at") != case.get("updated_at"):
+        return True
+    if review.get("status") == "done":
+        return False
+    if review.get("status") == "failed":
+        return review.get("attempts", 0) < AI_REVIEW_MAX_ATTEMPTS
+    return True  # pending/running left over from a crashed worker -- safe to redo
+
+
+def _process_ai_review(store, ai, email_id, case):
+    checked_at = case.get("updated_at")
+    attempts = (case.get("ai_review") or {}).get("attempts", 0) + 1
+    store.update_ai_review(
+        email_id, {"status": "running", "checked_at": checked_at, "attempts": attempts}
+    )
+    result = ai.review_case(case)
+    store.update_ai_review(
+        email_id,
+        {
+            **(result or {}),
+            "status": "done" if result else "failed",
+            "checked_at": checked_at,
+            "attempts": attempts,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+
+def _ai_review_worker(store):
+    """Runs for the lifetime of the dashboard process, giving every
+    unresolved NEEDS_REVIEW case a short AI opinion in the background so a
+    reviewer can check the dashboard at any time instead of waiting on a
+    synchronous request. Never touches the verification decision itself."""
+    ai = AIService()
+    if not ai.enabled:
+        return
+    while True:
+        try:
+            cases = store.list_cases()
+            decisions = store.list_decisions()
+            for email_id, case in cases.items():
+                if _needs_ai_review(case, decisions, email_id):
+                    _process_ai_review(store, ai, email_id, case)
+                    time.sleep(AI_REVIEW_CASE_PAUSE)
+        except Exception:
+            LOG.exception("AI review worker iteration failed")
+        time.sleep(AI_REVIEW_SCAN_INTERVAL)
+
+
 def run():
     import argparse
 
@@ -344,6 +405,9 @@ def run():
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     LOG.info("Review dashboard listening on %s:%s", args.host, args.port)
+    threading.Thread(
+        target=_ai_review_worker, args=(Handler.store(),), daemon=True
+    ).start()
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 
 

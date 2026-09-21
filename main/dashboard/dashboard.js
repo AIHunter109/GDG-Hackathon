@@ -91,6 +91,11 @@ function resultLabel(c) {
       ? "Human review completed"
       : LABEL[c.status] || "Processing";
 }
+function aiReviewStatus(c, id) {
+  if (c.status !== "NEEDS_REVIEW") return null;
+  if (state.decisions[id]?.action === "resolve") return null;
+  return c.ai_review?.status || "pending";
+}
 function resultKey(c) {
   return c.category === "BL_COMPARISON" &&
     c.status === "NEEDS_REVIEW" &&
@@ -308,6 +313,13 @@ function renderDashboard() {
         c.status === "NEEDS_REVIEW"
       )
         status.append(node("div", "Resolved by reviewer", "secondary-text"));
+      const aiStatus = aiReviewStatus(c, id);
+      if (aiStatus === "pending" || aiStatus === "running")
+        status.append(
+          node("div", "AI reviewing...", "secondary-text ai-pending"),
+        );
+      else if (aiStatus === "done")
+        status.append(node("div", "AI report ready", "secondary-text"));
       const action =
         c.status === "PROCESSING_FAILED"
           ? "Retry"
@@ -682,6 +694,38 @@ function renderMismatchDetail(c, slot) {
   panel.append(controls);
   slot.append(panel);
 }
+function renderAiOpinion(c, panel) {
+  if (!state.features.ai_enabled) return;
+  const review = c.ai_review,
+    card = node("div", "", "ai-opinion");
+  if (!review || review.status === "pending" || review.status === "running") {
+    card.append(
+      node("h4", "AI opinion"),
+      node(
+        "p",
+        "AI is reviewing this case -- check back shortly.",
+        "notice",
+      ),
+    );
+  } else if (review.status === "done") {
+    card.append(
+      node("h4", "AI opinion (for reference only)"),
+      node("p", review.assessment),
+      node("p", 'Proof: "' + review.proof + '"', "sub"),
+      node("p", "Suggested next step: " + review.recommended_action),
+    );
+  } else {
+    card.append(
+      node("h4", "AI opinion"),
+      node(
+        "p",
+        "AI review is unavailable for this case right now; the evidence below still stands on its own.",
+        "muted",
+      ),
+    );
+  }
+  panel.append(card);
+}
 function renderReview(c, area) {
   if (c.status === "OK" || c.status === "MISMATCH") {
     if (c.status === "OK")
@@ -765,10 +809,7 @@ function renderReview(c, area) {
         "notice",
       ),
     );
-  if (state.features.ai_enabled)
-    actions.append(
-      button("Explain review with AI", () => explain(c.email_id, panel)),
-    );
+  renderAiOpinion(c, panel);
   if (!c.si_fields && !c.bl_fields) {
     panel.append(
       node(
@@ -1017,20 +1058,6 @@ async function selectDocument(id, role, path) {
     alert(error.message);
   }
 }
-async function explain(id, panel) {
-  try {
-    const result = await request(apiPath("explain", id), {});
-    panel.append(
-      node(
-        "p",
-        result.explanation + " Recommended action: " + result.action,
-        "notice",
-      ),
-    );
-  } catch (error) {
-    panel.append(node("p", error.message, "notice error"));
-  }
-}
 async function draft(id, panel) {
   try {
     const result = await request(apiPath("draft", id), {});
@@ -1048,3 +1075,12 @@ $("status-filter").onchange = () => {
 };
 window.addEventListener("hashchange", route);
 load();
+function hasPendingAiReview() {
+  return Object.entries(state.cases).some(([id, c]) => {
+    const status = aiReviewStatus(c, id);
+    return status === "pending" || status === "running";
+  });
+}
+setInterval(() => {
+  if (hasPendingAiReview()) refresh();
+}, 4000);
