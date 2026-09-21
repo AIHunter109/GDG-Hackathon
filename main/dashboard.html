@@ -108,6 +108,51 @@
                 color: #597384;
                 font-size: 12px;
             }
+            .performance-metrics {
+                margin-bottom: 10px;
+            }
+            .trend-legend {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                margin: 8px 0 14px;
+                color: #597384;
+                font-size: 12px;
+            }
+            .trend-key::before {
+                content: "";
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                margin-right: 5px;
+                border-radius: 2px;
+                background: var(--key-color);
+            }
+            .trend-chart {
+                display: grid;
+                gap: 10px;
+                overflow-x: auto;
+            }
+            .trend-row {
+                display: grid;
+                grid-template-columns: 95px minmax(500px, 1fr);
+                align-items: center;
+                gap: 10px;
+            }
+            .trend-label {
+                color: #597384;
+                font-size: 12px;
+                text-align: right;
+            }
+            .trend-bars {
+                display: grid;
+                gap: 3px;
+            }
+            .trend-bar {
+                min-width: 2px;
+                height: 7px;
+                border-radius: 4px;
+            }
             .card-head {
                 display: flex;
                 align-items: center;
@@ -539,6 +584,34 @@
                     class="metrics"
                     aria-label="Email summary"
                 ></div>
+                <section class="card" id="performance-card">
+                    <div class="card-head">
+                        <h2>System Performance and Reliability</h2>
+                        <span class="muted">Validated measures</span>
+                    </div>
+                    <div id="performance-metrics" class="metrics performance-metrics"></div>
+                    <p id="performance-note" class="muted"></p>
+                </section>
+                <section class="card">
+                    <div class="card-head">
+                        <h2>Email processing trends</h2>
+                        <label class="filter-field">Group by
+                            <select id="trend-granularity">
+                                <option value="day">Daily</option>
+                                <option value="week">Weekly</option>
+                                <option value="month">Monthly</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="trend-legend">
+                        <span class="trend-key" style="--key-color:#16879a">Processed emails</span>
+                        <span class="trend-key" style="--key-color:#d18c37">Mismatches</span>
+                        <span class="trend-key" style="--key-color:#c45b53">Human review</span>
+                        <span class="trend-key" style="--key-color:#7946a3">Processing failures</span>
+                    </div>
+                    <div id="trend-chart" class="trend-chart"></div>
+                    <p id="trend-note" class="muted"></p>
+                </section>
                 <section class="card">
                     <div class="card-head">
                         <h2>Emails</h2>
@@ -571,6 +644,21 @@
                                 <option value="PROCESSING_FAILED">Processing failed</option>
                                 <option value="NOT_APPLICABLE">Not applicable</option>
                             </select>
+                        </label>
+                        <label class="filter-field">Date
+                            <select id="date-filter">
+                                <option value="all">All time</option>
+                                <option value="today">Today</option>
+                                <option value="7">Last 7 days</option>
+                                <option value="30">Last 30 days</option>
+                                <option value="custom">Custom range</option>
+                            </select>
+                        </label>
+                        <label id="date-from-field" class="filter-field hidden">From
+                            <input id="date-from" type="date" />
+                        </label>
+                        <label id="date-to-field" class="filter-field hidden">To
+                            <input id="date-to" type="date" />
                         </label>
                         <button id="clear-filters" class="small-btn" type="button">Clear filters</button>
                     </div>
@@ -856,6 +944,98 @@
                     node("span", title),
                 );
             }
+            function percentage(value) {
+                return Number.isFinite(value) ? (value * 100).toFixed(value === 1 ? 0 : 1) + "%" : "Unavailable";
+            }
+            function caseTimestamp(c) {
+                const email = c.email || {};
+                for (const value of [email.date, email.timestamp, email.sent_at, email.received_at, c.updated_at]) {
+                    const time = Date.parse(value);
+                    if (Number.isFinite(time)) return time;
+                }
+                return null;
+            }
+            function dateMatches(c) {
+                const selection = $("date-filter").value;
+                if (selection === "all") return true;
+                const time = caseTimestamp(c);
+                if (time == null) return false;
+                const now = new Date(), start = new Date(now), end = new Date(now);
+                start.setHours(0, 0, 0, 0);
+                end.setHours(23, 59, 59, 999);
+                if (selection === "7" || selection === "30")
+                    start.setDate(start.getDate() - Number(selection) + 1);
+                if (selection === "custom") {
+                    const from = $("date-from").value, to = $("date-to").value;
+                    if (from) start.setTime(new Date(from + "T00:00:00").getTime());
+                    else start.setTime(-8640000000000000);
+                    if (to) end.setTime(new Date(to + "T23:59:59.999").getTime());
+                    else end.setTime(8640000000000000);
+                }
+                return time >= start.getTime() && time <= end.getTime();
+            }
+            function trendBucket(time, granularity) {
+                const date = new Date(time);
+                if (granularity === "week") {
+                    const day = (date.getDay() + 6) % 7;
+                    date.setDate(date.getDate() - day);
+                }
+                const year = date.getFullYear(), month = String(date.getMonth() + 1).padStart(2, "0");
+                if (granularity === "month") return `${year}-${month}`;
+                return `${year}-${month}-${String(date.getDate()).padStart(2, "0")}`;
+            }
+            function renderPerformance() {
+                const verified = state.features.verified_performance;
+                const m = state.metrics;
+                const values = [
+                    metric("Field extraction coverage", percentage(m.field_extraction_coverage)),
+                    metric("Human review rate", percentage(m.human_review_rate)),
+                    metric("Processing failure rate", percentage(m.processing_failure_rate)),
+                ];
+                if (verified) values.unshift(
+                    metric("Classification accuracy", percentage(verified.classification_accuracy)),
+                    metric("Mismatch precision / recall", `${percentage(verified.mismatch_precision)} / ${percentage(verified.mismatch_recall)}`),
+                    metric("Expected / predicted reviews", `${verified.expected_reviews} / ${verified.predicted_reviews}`),
+                );
+                $("performance-metrics").replaceChildren(...values);
+                $("performance-note").textContent = verified
+                    ? `${verified.dataset}; verified ${verified.verified_at}. False reviews: ${verified.false_reviews}; missed reviews: ${verified.missed_reviews}. Coverage and operational rates are calculated from the currently loaded cases. Metrics are kept separate because they measure different tasks.`
+                    : "Ground-truth accuracy measures are unavailable. Coverage and operational rates are calculated from the currently loaded cases; no overall accuracy is inferred.";
+            }
+            function renderTrends() {
+                const granularity = $("trend-granularity").value;
+                const groups = new Map();
+                let undated = 0;
+                for (const [id, c] of Object.entries(state.cases)) {
+                    if (!dateMatches(c)) continue;
+                    const time = caseTimestamp(c);
+                    if (time == null) { undated += 1; continue; }
+                    const key = trendBucket(time, granularity);
+                    const item = groups.get(key) || { processed: 0, mismatch: 0, review: 0, failed: 0 };
+                    item.processed += 1;
+                    if (c.status === "MISMATCH") item.mismatch += 1;
+                    if (unresolved(id, c)) item.review += 1;
+                    if (c.status === "PROCESSING_FAILED") item.failed += 1;
+                    groups.set(key, item);
+                }
+                const entries = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+                const maximum = Math.max(1, ...entries.flatMap(([, item]) => Object.values(item)));
+                const colors = { processed: "#16879a", mismatch: "#d18c37", review: "#c45b53", failed: "#7946a3" };
+                $("trend-chart").replaceChildren(...entries.map(([label, item]) => {
+                    const bars = node("div", "", "trend-bars");
+                    for (const [name, count] of Object.entries(item)) {
+                        const bar = node("div", "", "trend-bar");
+                        bar.style.width = `${Math.max(count ? 1 : 0, count / maximum * 100)}%`;
+                        bar.style.background = colors[name];
+                        bar.title = `${name}: ${count}`;
+                        bars.append(bar);
+                    }
+                    return add(node("div", "", "trend-row"), node("span", label, "trend-label"), bars);
+                }));
+                $("trend-note").textContent = entries.length
+                    ? `${entries.length} ${granularity === "day" ? "daily" : granularity === "week" ? "weekly" : "monthly"} period${entries.length === 1 ? "" : "s"}. ${undated ? undated + " undated record(s) excluded." : "All displayed records have a real email or processing timestamp."}`
+                    : `No timestamped records match this date range.${undated ? " " + undated + " undated record(s) were excluded." : ""}`;
+            }
             function visibleCases() {
                 const search = $("search").value.toLowerCase(),
                     category = $("category-filter").value,
@@ -874,6 +1054,7 @@
                         status === key;
                     return (
                         statusMatch &&
+                        dateMatches(c) &&
                         (category === "all" || category === c.category) &&
                         [id, e.from, e.subject].some((v) =>
                             String(v || "")
@@ -892,7 +1073,7 @@
                     $("new-email-count").textContent =
                         newIds.length + (newIds.length === 1 ? " submission" : " submissions");
                     const historyRows = newIds
-                        .filter((id) => state.cases[id])
+                        .filter((id) => state.cases[id] && dateMatches(state.cases[id]))
                         .sort((a, b) =>
                             (Date.parse(latestUpdate(state.cases[b], state.decisions[b])) || 0) -
                             (Date.parse(latestUpdate(state.cases[a], state.decisions[a])) || 0),
@@ -931,6 +1112,8 @@
                     metric("Human Review Required", m.human_review || 0),
                     metric("Processing", m.processing || 0),
                 );
+                renderPerformance();
+                renderTrends();
                 const entries = visibleCases();
                 $("case-count").textContent =
                     entries.length + " of " + (m.total || 0) + " emails";
@@ -1895,10 +2078,24 @@
             $("search").oninput = renderDashboard;
             $("category-filter").onchange = renderDashboard;
             $("status-filter").onchange = renderDashboard;
+            $("date-filter").onchange = () => {
+                const custom = $("date-filter").value === "custom";
+                $("date-from-field").classList.toggle("hidden", !custom);
+                $("date-to-field").classList.toggle("hidden", !custom);
+                renderDashboard();
+            };
+            $("date-from").onchange = renderDashboard;
+            $("date-to").onchange = renderDashboard;
+            $("trend-granularity").onchange = renderTrends;
             $("clear-filters").onclick = () => {
                 $("search").value = "";
                 $("category-filter").value = "all";
                 $("status-filter").value = "all";
+                $("date-filter").value = "all";
+                $("date-from").value = "";
+                $("date-to").value = "";
+                $("date-from-field").classList.add("hidden");
+                $("date-to-field").classList.add("hidden");
                 renderDashboard();
             };
             window.addEventListener("hashchange", route);

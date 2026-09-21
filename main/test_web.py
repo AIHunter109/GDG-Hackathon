@@ -69,6 +69,8 @@ class WebWorkflowTests(unittest.TestCase):
             with urllib.request.urlopen(base + "/api/cases") as response:
                 cases = json.load(response)
             self.assertEqual(cases["metrics"]["mismatches"], 1)
+            self.assertEqual(cases["features"]["verified_performance"]["expected_reviews"], 20)
+            self.assertNotIn("overall_accuracy", cases["features"]["verified_performance"])
             with urllib.request.urlopen(base + "/api/email/email_demo") as response:
                 self.assertEqual(json.load(response)["subject"], "Check draft BL")
             with urllib.request.urlopen(base + "/api/document/email_demo/0") as response:

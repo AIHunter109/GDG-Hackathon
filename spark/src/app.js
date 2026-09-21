@@ -190,6 +190,7 @@ function currentData() {
       cloud_mode: Boolean(database),
       original_email_count: Object.keys(baseRecords).length,
       new_case_ids: newCaseIds,
+      verified_performance: window.SEAL_VERIFIED_PERFORMANCE || null,
     },
   };
 }

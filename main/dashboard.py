@@ -22,6 +22,7 @@ from repository import get_repository
 from review_actions import apply_correction, confirm_value, mark_equivalent, submission_for_case
 
 LOG = logging.getLogger(__name__)
+VERIFIED_PERFORMANCE = json.loads((Path(__file__).parent / "verified_performance.json").read_text(encoding="utf-8"))
 
 
 def metrics_for(cases, decisions=None):
@@ -101,7 +102,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"cases": cases, "decisions": decisions,
                                         "metrics": metrics_for(cases, decisions),
                                         "features": {"ai_enabled": AIService().enabled,
-                                                     "cloud_mode": bool(os.getenv("GCS_BUCKET"))}})
+                                                     "cloud_mode": bool(os.getenv("GCS_BUCKET")),
+                                                     "verified_performance": VERIFIED_PERFORMANCE}})
             if len(parts) == 3 and parts[:2] == ["api", "email"]:
                 return self._send(200, self.store().get_email(parts[2]))
             if len(parts) == 4 and parts[:2] == ["api", "attachment"]:

@@ -17,7 +17,9 @@ The seven verified fields are:
 - **Email classification:** separates document comparisons, SI requests, invoice queries, general email, and spam.
 - **Document processing:** reads TXT, XLSX, DOCX, and PDF in the Python pipeline. Native extraction runs first; Gemini is used only for uncertain intent, ambiguous document roles, unfamiliar labels, image-only PDFs, requested review explanations, and optional correction-email wording.
 - **Deterministic verification:** normalizes the seven fields, checks shipment identifiers and document totals, then reports no mismatch, mismatch, human review, processing, or processing failure. AI does not make the final comparison decision.
-- **Reviewer workspace:** shows dashboard totals, combined search/category/status filters, the 520 source emails, attachment counts, and a separate history for new submissions.
+- **Reviewer workspace:** shows dashboard totals, validated system-performance measures, combined search/category/status/date filters, email-processing trends, the 520 source emails, attachment counts, and a separate history for new submissions.
+- **System performance and reliability:** surfaces verified classification and mismatch results when evaluation data is available, alongside live field-extraction coverage, human-review rate, processing-failure rate, and review diagnostics. These measures remain separate instead of being presented as an unsupported overall-accuracy score.
+- **Time-based email analytics:** filters timestamped records by Today, Last 7 Days, Last 30 Days, All Time, or a custom range. Processing trends can be grouped by Daily, Weekly, or Monthly periods.
 - **Case Detail:** shows the email, attachment text, SI and draft BL evidence, normalized values, discrepancies, validation results, and reviewer actions in one page.
 - **Human review:** reviewers can confirm or correct a field, mark values equivalent, choose which attachment is the SI or draft BL, retry extraction or OCR, confirm a mismatch, resolve a review, and reopen a completed review.
 - **Correction drafting:** creates a draft only after a mismatch is confirmed. The application never sends it automatically.
@@ -63,7 +65,7 @@ The seven verified fields are:
 - [main/main.py](main/main.py) coordinates classification, extraction, validation, fallback AI, status decisions, and competition output.
 - [main/ai_service.py](main/ai_service.py) contains the validated Gemini fallbacks for uncertain intent, document roles, unfamiliar labels, PDF transcription, and review explanations.
 - [main/review_actions.py](main/review_actions.py) applies reviewer confirmation, correction, and equivalence decisions before rerunning deterministic comparison.
-- [main/dashboard.py](main/dashboard.py) and [main/dashboard.html](main/dashboard.html) provide the local API, Dashboard, Case Detail, filters, evidence views, retry actions, and review workflow.
+- [main/dashboard.py](main/dashboard.py) and [main/dashboard.html](main/dashboard.html) provide the local API, Dashboard, Case Detail, operational and reliability measures, email date filters, Daily/Weekly/Monthly trends, evidence views, retry actions, and review workflow.
 - [spark/src/app.js](spark/src/app.js) connects the hosted interface to Google sign-in, private Firestore records, Firebase AI Logic, reanalysis, and new-email history.
 - [spark/src/batch.js](spark/src/batch.js) and [spark/src/batch_ui.js](spark/src/batch_ui.js) implement mixed-file and folder pairing, preview, manual pairing, limits, pause, retry, and duplicate skipping.
 - [spark/firestore.rules](spark/firestore.rules) restricts the original dataset and reviewer workspace to the verified owner account.
@@ -99,7 +101,13 @@ TXT, XLSX, and DOCX extraction use the Python standard library. Selectable PDF t
 .venv\Scripts\python.exe main\dashboard.py
 ```
 
-Open `http://127.0.0.1:8765`. The Dashboard is the home page. Summary cards show totals, while search, category, and status filters narrow the email table; opening a row takes you to its Case Detail page. The detail page keeps the seven-field SI/BL comparison, clickable mismatch evidence, human-review actions, and expandable email and attachments together. A reviewer can confirm or correct a selected value, mark two values equivalent, choose the SI and draft BL, retry extraction, confirm a mismatch, resolve a review, or undo review completion. Value changes rerun the comparison and update the case and submission. If Gemini is configured, an on-demand AI explanation can summarize review evidence and PDF cases can be retried with OCR/Vision; the verification rules still decide the result. A correction email draft, optionally worded by AI, is available only after a mismatch is confirmed; the reviewer must send it separately.
+Open `http://127.0.0.1:8765`. The Dashboard is the home page. Summary cards show operational totals and validated performance measures. Search, category, status, and date filters narrow the email table; opening a row takes you to its Case Detail page.
+
+For timestamped records, the date filter supports **Today**, **Last 7 Days**, **Last 30 Days**, **All Time**, and a **Custom range**. A separate **Daily / Weekly / Monthly** selector controls email-processing trend aggregation for processed emails, mismatches, unresolved human-review cases, and processing failures. Records without a valid email or processing timestamp are excluded from time-based analytics rather than assigned an invented date.
+
+The **System Performance and Reliability** section shows separately labelled measures. Verified classification accuracy, mismatch precision/recall, and review diagnostics come from the included ground-truth evaluation summary. Field-extraction coverage, human-review rate, and processing-failure rate are calculated from the currently loaded cases. Coverage indicates whether values were found and is not labelled as extraction accuracy.
+
+The detail page keeps the seven-field SI/BL comparison, clickable mismatch evidence, human-review actions, and expandable email and attachments together. A reviewer can confirm or correct a selected value, mark two values equivalent, choose the SI and draft BL, retry extraction, confirm a mismatch, resolve a review, or undo review completion. Value changes rerun the comparison and update the case and submission. If Gemini is configured, an on-demand AI explanation can summarize review evidence and PDF cases can be retried with OCR/Vision; the verification rules still decide the result. A correction email draft, optionally worded by AI, is available only after a mismatch is confirmed; the reviewer must send it separately.
 
 The hosted browser edition has one **Add emails and documents** function with these modes:
 
@@ -119,7 +127,7 @@ The included `Docker/server/score_cli.py` can evaluate a local bundle when groun
 .venv\Scripts\python.exe Docker\server\score_cli.py submission.json --json
 ```
 
-The API also reports field extraction coverage, human-review rate, and processing-failure rate for the current cases. Coverage measures whether fields were found; measuring field extraction **accuracy** requires independently labeled field values. The scorer reports classification and mismatch results against its local ground truth.
+The API also reports field extraction coverage, human-review rate, and processing-failure rate for the current cases. Coverage measures whether fields were found; measuring field extraction **accuracy** requires independently labeled field values. The scorer reports classification and mismatch results against its local ground truth. These distinct measures feed the Dashboard instead of a vague combined accuracy percentage.
 
 To inspect why cases enter review, generate a diagnostic report. Supplying ground truth additionally reports false and missed reviews:
 
