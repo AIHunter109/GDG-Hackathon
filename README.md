@@ -18,7 +18,7 @@ TXT, XLSX, and DOCX extraction use the Python standard library. Selectable PDF t
 
 **Two AI providers are supported**, chosen automatically by `AIService` from whichever key is set (`AI_PROVIDER=gemini` or `AI_PROVIDER=gonkarouter` forces one explicitly if you ever have both configured):
 - **Gemini** -- set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-2.5-flash`, a verified-working non-preview model).
-- **GonkaRouter** -- an API gateway routing to third-party models (MiniMax, Kimi, Zhipu, DeepSeek); set `GONKAROUTER_API_KEY` (and optionally `GONKAROUTER_MODEL`, default `MiniMaxAI/MiniMax-M2.7`). If this key is present, it's used instead of Gemini unless `AI_PROVIDER=gemini` is set. `ai_service.py`'s only provider-specific code is in `_json_gemini`/`_json_gonkarouter` -- every higher-level method (classification, document-role detection, field mapping, PDF vision, review explanation, correction drafting) is written once and works against either provider identically, including the anti-hallucination and confidence-threshold guardrails.
+- **GonkaRouter** -- an API gateway routing to third-party models (MiniMax, Kimi, Zhipu, DeepSeek); set `GONKAROUTER_API_KEY` (and optionally `GONKAROUTER_MODEL`, default `deepseek-ai/DeepSeek-V4-Flash-0731`, a non-reasoning model chosen for speed and reliability on this app's short structured-JSON tasks). If this key is present, it's used instead of Gemini unless `AI_PROVIDER=gemini` is set. `ai_service.py`'s only provider-specific code is in `_json_gemini`/`_json_gonkarouter` -- every higher-level method (classification, document-role detection, field mapping, PDF vision, review explanation, correction drafting) is written once and works against either provider identically, including the anti-hallucination and confidence-threshold guardrails.
 
 **Configuring either key**: set it as a real environment variable (`$env:GEMINI_API_KEY = "..."` for the current terminal, or `setx GEMINI_API_KEY "..."` to persist across new terminals/processes), or copy `.env.example` to `.env` at the repo root and fill it in there. `.env` is gitignored and never committed. A real environment variable always takes priority over `.env` if both are set -- `.env` only fills in whatever isn't already set. Every entry point (`main.py`, `dashboard.py`, `check_gemini_live.py`) loads `.env` automatically at startup via `main/dotenv_loader.py`, a small dependency-free parser (no `python-dotenv` package needed, consistent with this project's existing habit of hand-rolling small parsers instead of adding a dependency for something simple). Run `python main/check_gemini_live.py` any time to verify whichever provider/key you've configured actually works live, without touching your real data. AI output is checked against source evidence and low-confidence extraction is sent to human review. The model never performs the final SI/BL comparison. Decisions use `NEEDS_REVIEW` plus the bundle's allowed review reasons in the submission. More specific internal reasons and source text remain in `evidence.json`.
 
@@ -57,18 +57,22 @@ gcloud firestore databases create --database='(default)' --location=$region --ed
 gcloud storage buckets create "gs://$bucketName" --location=$region --uniform-bucket-level-access --public-access-prevention
 gcloud iam service-accounts create shipping-verifier
 gcloud projects add-iam-policy-binding $projectId --member="serviceAccount:$serviceAccount" --role='roles/datastore.user'
-gcloud storage buckets add-iam-policy-binding "gs://$bucketName" --member="serviceAccount:$serviceAccount" --role='roles/storage.objectViewer'
-gcloud run deploy shipping-verifier --source . --region=$region --service-account=$serviceAccount --no-allow-unauthenticated --set-env-vars="GCS_BUCKET=$bucketName,GOOGLE_CLOUD_PROJECT=$projectId"
+gcloud storage buckets add-iam-policy-binding "gs://$bucketName" --member="serviceAccount:$serviceAccount" --role='roles/storage.objectAdmin'
+gcloud run deploy shipping-verifier --source . --region=$region --service-account=$serviceAccount --allow-unauthenticated --set-env-vars="GCS_BUCKET=$bucketName,GOOGLE_CLOUD_PROJECT=$projectId"
 ```
 
-For Gemini, create a new auth [Gemini API key in Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key). Create a Secret Manager secret named `gemini-api-key` with that value using the [Cloud Console](https://docs.cloud.google.com/secret-manager/docs/create-secret-quickstart), then grant the runtime service account access and attach version 1 to Cloud Run:
+`storage.objectAdmin` (not `objectViewer`) because the dashboard's upload feature writes new attachment blobs, not just reads existing ones. `--allow-unauthenticated` makes the URL a public demo: anyone with the link can view cases and perform reviewer actions (confirm, correct, upload documents) -- there is no login wall. If you want a private demo instead, use `--no-allow-unauthenticated` and see the note at the end of this section for authenticated access.
+
+For AI assistance, use either provider (see "Two AI providers are supported" above) -- create a Secret Manager secret with the key value using the [Cloud Console](https://docs.cloud.google.com/secret-manager/docs/create-secret-quickstart), then grant the runtime service account access and attach it to Cloud Run. For Gemini, get a key from [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key):
 
 ```powershell
 gcloud secrets add-iam-policy-binding gemini-api-key --member="serviceAccount:$serviceAccount" --role='roles/secretmanager.secretAccessor'
 gcloud run services update shipping-verifier --region=$region --set-secrets='GEMINI_API_KEY=gemini-api-key:1'
 ```
 
-Do not put the key in source control or chat. The AI service uses the [Gemini generateContent API](https://ai.google.dev/api/generate-content) with JSON output. Verify it with a synthetic email and a scanned PDF retry; a configured key alone does not prove the live calls work.
+For GonkaRouter instead, create a secret (e.g. `gonkarouter-api-key`) the same way and set `GONKAROUTER_API_KEY` instead of `GEMINI_API_KEY` in the `--set-secrets` flag above.
+
+Do not put the key in source control or chat. The AI service uses either the [Gemini generateContent API](https://ai.google.dev/api/generate-content) or GonkaRouter's Messages-compatible API, both with JSON output. Verify it with a synthetic email and a scanned PDF retry; a configured key alone does not prove the live calls work.
 
 Seed the case database and attachment bucket using Application Default Credentials on the upload machine:
 
@@ -81,6 +85,8 @@ gcloud auth application-default login
 .venv\Scripts\python.exe main\seed_cloud.py --source Bundle
 ```
 
-Cloud Run reads case state from Firestore and original attachments from Cloud Storage. Its service account uses [Application Default Credentials](https://docs.cloud.google.com/run/docs/integrate/using-gcp-services). The deployment above remains private. To test it in a browser, use the [Cloud Run proxy](https://docs.cloud.google.com/run/docs/triggering/https-request) with an authorized account, or configure Identity-Aware Proxy for testers. Granting Invoker alone does not make a direct browser visit send credentials. For judge access, arrange the approved authenticated path before sharing the URL. The local competition bundle and generated files remain excluded from the container image and Git.
+Cloud Run reads case state from Firestore and original attachments from Cloud Storage. Its service account uses [Application Default Credentials](https://docs.cloud.google.com/run/docs/integrate/using-gcp-services). The deployment above is public (`--allow-unauthenticated`): the printed service URL works directly in any browser, no sign-in required, which is what a public live demo needs. The local competition bundle and generated files remain excluded from the container image and Git.
+
+If you deploy with `--no-allow-unauthenticated` instead (a private demo), use the [Cloud Run proxy](https://docs.cloud.google.com/run/docs/triggering/https-request) with an authorized account, or configure Identity-Aware Proxy for testers -- granting Invoker alone does not make a direct browser visit send credentials, so arrange the approved authenticated path before sharing that URL.
 
 For user testing, ask two or three shipping operations reviewers to work through [main/USER_TESTING.md](main/USER_TESTING.md) without coaching. Record their actual task results and comments, make changes that address observed confusion, then repeat the tasks. The template intentionally contains no invented feedback.

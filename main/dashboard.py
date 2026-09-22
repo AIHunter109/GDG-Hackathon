@@ -214,12 +214,19 @@ class Handler(BaseHTTPRequestHandler):
                     STATIC_ASSETS[parts[0]],
                 )
             if parts == ["api", "cases"]:
-                cases = self.store().list_cases()
-                decisions = self.store().list_decisions()
+                store = self.store()
+                cases = store.list_cases()
+                decisions = store.list_decisions()
+                new_case_ids = (
+                    store.list_new_case_ids()
+                    if hasattr(store, "list_new_case_ids")
+                    else []
+                )
                 return self._send(200, {"cases": cases, "decisions": decisions,
                                         "metrics": metrics_for(cases, decisions),
                                         "features": {"ai_enabled": AIService().enabled,
                                                      "cloud_mode": bool(os.getenv("GCS_BUCKET")),
+                                                     "new_case_ids": new_case_ids,
                                                      "verified_performance": VERIFIED_PERFORMANCE}})
             if len(parts) == 3 and parts[:2] == ["api", "email"]:
                 return self._send(200, self.store().get_email(parts[2]))
@@ -535,8 +542,14 @@ def run():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8765")))
     parser.add_argument(
+        # A hosting platform (Cloud Run, Render, Railway, Fly.io, ...) sets
+        # PORT itself to tell the app which port to bind; a plain local run
+        # normally doesn't set it. That presence, not a Cloud-Run-specific
+        # variable, is what should decide whether to accept outside traffic
+        # -- otherwise this silently binds to localhost-only (unreachable)
+        # on every platform except Cloud Run.
         "--host",
-        default=os.getenv("HOST", "0.0.0.0" if os.getenv("K_SERVICE") else "127.0.0.1"),
+        default=os.getenv("HOST", "0.0.0.0" if os.getenv("PORT") else "127.0.0.1"),
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)

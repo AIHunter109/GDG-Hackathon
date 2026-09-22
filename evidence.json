@@ -31395,26 +31395,5 @@
       "attempts": 3,
       "updated_at": "2026-09-21T18:15:47.478469+00:00"
     }
-  },
-  "local_b21ebd1f429b": {
-    "email_id": "local_b21ebd1f429b",
-    "email": {
-      "from": "",
-      "to": "",
-      "subject": "Review submission: submission",
-      "body": "Please review and classify the attached document or email.",
-      "attachments": []
-    },
-    "category": "GENERAL",
-    "classification": {
-      "category": "GENERAL",
-      "confidence": 0.7,
-      "reason": "No comparison or specific request detected"
-    },
-    "classification_confidence": 0.7,
-    "classification_fallback": true,
-    "retry_count": 0,
-    "status": "OK",
-    "updated_at": "2026-09-21T18:11:02.614276+00:00"
   }
 }

@@ -12,6 +12,7 @@ from call_for_help import RaiseIssueToHuman
 from inbox import Inbox
 
 ROOT = Path(__file__).resolve().parent.parent
+SUPPORTED_ATTACHMENT_EXTENSIONS = {".pdf", ".txt", ".xlsx", ".docx"}
 
 
 def _stamp(case):
@@ -70,7 +71,7 @@ class LocalRepository:
         paths = []
         for role, filename, content in attachments:
             suffix = Path(filename).suffix.lower()
-            if suffix not in {".pdf", ".txt", ".xlsx", ".docx"}:
+            if suffix not in SUPPORTED_ATTACHMENT_EXTENSIONS:
                 raise ValueError("Only PDF, TXT, XLSX, and DOCX documents are supported")
             safe_role = re.sub(r"[^a-z0-9_-]", "", role.lower()) or "document"
             relative = Path(".local_uploads") / "attachments" / f"{email_id}_{safe_role}{suffix}"
@@ -98,7 +99,7 @@ class LocalRepository:
         paths = []
         for role, filename, content in attachments:
             suffix = Path(filename).suffix.lower()
-            if suffix not in {".pdf", ".txt", ".xlsx", ".docx"}:
+            if suffix not in SUPPORTED_ATTACHMENT_EXTENSIONS:
                 raise ValueError("Only PDF, TXT, XLSX, and DOCX documents are supported")
             relative = Path(".local_uploads") / "attachments" / f"{email_id}_{role}{suffix}"
             (ROOT / relative).write_bytes(content)
@@ -196,6 +197,52 @@ class CloudRepository:
         if not path.startswith("attachments/") or ".." in Path(path).parts:
             raise ValueError("Invalid attachment path")
         return self.bucket.blob(path).download_as_bytes()
+
+    def list_new_case_ids(self):
+        return [
+            snapshot.id
+            for snapshot in self.collection.stream()
+            if snapshot.to_dict() and snapshot.to_dict().get("uploaded")
+        ]
+
+    def _upload_attachments(self, email_id, attachments):
+        paths = []
+        for role, filename, content in attachments:
+            suffix = Path(filename).suffix.lower()
+            if suffix not in SUPPORTED_ATTACHMENT_EXTENSIONS:
+                raise ValueError("Only PDF, TXT, XLSX, and DOCX documents are supported")
+            safe_role = re.sub(r"[^a-z0-9_-]", "", role.lower()) or "document"
+            path = f"attachments/{email_id}_{safe_role}{suffix}"
+            self.bucket.blob(path).upload_from_string(content)
+            paths.append(path)
+        return paths
+
+    def save_new_email(self, metadata, attachments):
+        """Persist a reviewer-submitted email and its attachments -- the
+        Cloud Run equivalent of LocalRepository's save_new_email, using GCS
+        for bytes and Firestore for the email record instead of the local
+        .local_uploads/ folder."""
+        email_id = "local_" + uuid.uuid4().hex[:12]
+        paths = self._upload_attachments(email_id, attachments)
+        email = {
+            "email_id": email_id,
+            "from": str(metadata.get("from", ""))[:320],
+            "to": str(metadata.get("to", ""))[:320],
+            "subject": str(metadata.get("subject", ""))[:500],
+            "body": str(metadata.get("body", ""))[:20_000],
+            "attachments": paths,
+        }
+        self.collection.document(email_id).set(
+            {"email": email, "uploaded": True}, merge=True
+        )
+        return email
+
+    def replace_documents(self, email_id, attachments):
+        """Store reviewer-selected replacement files while keeping the case identity."""
+        email = dict(self.get_email(email_id))
+        email["attachments"] = self._upload_attachments(email_id, attachments)
+        self.collection.document(email_id).set({"email": email}, merge=True)
+        return email
 
     def list_decisions(self):
         return {
