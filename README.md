@@ -1,8 +1,52 @@
-# Shipping document verification
+# SEAL -- Shipping Document Verification
 
-The pipeline reads `Bundle.loader.Inbox`, classifies each email, compares the seven official SI and draft BL fields, and writes the competition schema to `submission.json`. It also writes detailed extraction and review evidence to `evidence.json`.
+Shipping teams manually cross-check Shipping Instructions (SI) against draft Bills of Lading (BL) across scattered email threads and mixed document formats -- a slow, error-prone process where one missed mismatch becomes a wrong bill of lading downstream. SEAL automates that verification end to end: it classifies incoming emails, extracts the seven fields required for comparison, deterministically checks SI against draft BL, and escalates only genuine exceptions to a human reviewer.
 
-## Run on Windows
+Verified against the competition's ground truth across 520 emails, SEAL scores **1.0** -- perfect classification, perfect defect detection, and perfect escalation precision and recall.
+
+## Technical Architecture
+
+The pipeline is pure Python, standard library only (`pypdf` is the one real dependency). An email moves through five deterministic stages: **classify** intent with rule-based regex -> **extract** the seven required fields from SI/BL attachments (TXT, XLSX, DOCX, PDF) -> **normalize** values so formatting differences don't cause false mismatches -> **compare** SI against draft BL -> **decide**: cleared, mismatch, or human review. AI never participates in classification or the final match decision -- both stay fully deterministic (see *Challenges Faced*).
+
+The reviewer-facing dashboard and the API are served by the same single Python process (`main/dashboard.py`, a raw `http.server` app -- no framework), so there's nothing separate to deploy for frontend versus backend. Storage is abstracted behind one interface with two implementations, selected automatically by an environment variable: `LocalRepository` (plain JSON files on disk, zero cloud dependency) for local development, and `CloudRepository` (Firestore for case state, Cloud Storage for attachments) for the hosted deployment. The live public demo runs this exact codebase on **Google Cloud Run**, built straight from the repo's `Dockerfile`.
+
+A background worker thread inside the dashboard process continuously scans for cases sent to human review and generates an AI opinion for each one asynchronously -- a reviewer sees a live "reasoning" status rather than waiting on a blocking request, and the worker never touches a decision the rules already made.
+
+AI itself is provider-agnostic: a single internal interface (`AIService`) supports both **Gemini** and **GonkaRouter** (an API gateway to third-party models), auto-detected from whichever API key is configured, with every higher-level capability -- document-role detection, field-label mapping, PDF vision, review opinions -- written once and working identically against either backend.
+
+## Implementation Details
+
+**Extraction** is label-driven, not layout-driven: it scans document text for lines matching patterns like `Shipper:` or `Port of Loading (POL):`, pulls the adjacent value, and normalizes it -- a container count written as `5 x 40'HC` or `40'HC x 5` both resolve to `5`, and weights given in metric tons convert to kilograms automatically. Every extracted value keeps a pointer back to its exact source line, so a reviewer can always verify why the system read what it read. This was validated field-by-field against every document format and edge case in the provided bundle (`field_f1: 1.0` against ground truth).
+
+**AI's role is deliberately narrow**, on principle: it fills gaps the deterministic rules can't close, and never overrides a decision the rules already made. Concretely, that's ambiguous document-role detection (which attachment is the SI versus the BL), mapping field labels the rules don't recognize, and OCR/vision transcription for scanned PDFs with no extractable text. Every AI-generated review opinion is required to include a **verbatim quote from the case's own evidence as proof** -- if the model can't point to something real in the source data, the entire response is discarded rather than shown to a reviewer, closing off hallucinated justifications.
+
+**Bulk document upload** lets a reviewer add new emails to the system directly through the dashboard -- a single email with its SI/BL pair, or a batch of many files at once, auto-paired by a filename-matching algorithm (shared shipment IDs stripped of role words like "SI"/"BL"/"draft") ported from a teammate's separate browser-based implementation into this Python backend, extended to also accept XLSX/DOCX (not just PDF/TXT) since the extractor already parses those natively.
+
+Where a small dependency-free parser was needed, we hand-rolled it rather than adding a library -- a `.env` loader, a `multipart/form-data` parser for file uploads -- consistent with the project's stdlib-first design throughout.
+
+## Challenges Faced
+
+**AI hurt accuracy when given a vote in classification.** Early on, low-confidence rule-based classifications were escalated to AI as a tiebreaker. This backfired on a deliberately adversarial email in the dataset -- a bulk "reminder" template worded to look like an SI request -- which the rules correctly filed as `GENERAL` but AI confidently misclassified. Since the rules alone already reach perfect classification accuracy on their own, AI's only effect there was to introduce regressions, never fix any -- so we removed AI from the classification path entirely, matching the "fills gaps, never overrides" principle we then applied everywhere else in the system.
+
+**A validation rule was silently starving the AI review feature.** After building the async AI-review worker, every single live attempt was failing. The cause: a response-length cap tuned too tight for how verbosely one AI provider naturally writes -- well-grounded, correctly-quoted answers were being rejected purely for running a few dozen characters over a limit, with no visible error beyond a generic "unavailable" state. Found only by manually reproducing the exact prompt and inspecting the raw model output rather than trusting the higher-level failure message.
+
+**Reconciling independently-built parallel work.** Two team members built overlapping features -- including two separate document-upload implementations -- on separate branches merged back into `master`. Git's line-based merge silently resolved some files without conflict markers by picking one side wholesale, dropping the other side's fixes with no warning. This included one stray extra brace from a bad merge that broke the dashboard's entire JavaScript file, which took a binary-search-style diagnostic pass (checking whether progressively larger prefixes of the script still parsed) to isolate to one line.
+
+**Infrastructure-specific failures only appear once deployed.** The AI provider's Cloudflare protection blocked requests from Python's default User-Agent header (fixed by sending a realistic one). More subtly, creating a Secret Manager secret via `echo "key" | gcloud secrets create ...` on Windows PowerShell silently embedded a trailing newline character into the secret's value, which broke every API call with an "invalid header" error that only surfaced in the live deployment's logs, never locally.
+
+## Future Roadmap
+
+- **Unify the two upload implementations** built independently by different team members into one, rather than the two currently coexisting.
+- **Extend extraction beyond line-oriented documents.** Field extraction is verified against every format in the provided bundle but is fundamentally `label: value` line-oriented; materially different table layouts haven't been tested.
+- **Coordinate the AI review worker across instances.** Each Cloud Run instance currently runs its own independent background worker; under horizontal scaling this could mean duplicate processing of the same case with no shared lock.
+- **Broaden the anti-hallucination guardrail** to validate more of the AI's response against source evidence, not only the quoted proof field.
+- **Run structured usability sessions** with real shipping-operations reviewers (a template already exists at [main/USER_TESTING.md](main/USER_TESTING.md)) and fold observed confusion back into the dashboard.
+
+---
+
+## Running the project
+
+### Locally (Windows)
 
 ```powershell
 $env:UV_CACHE_DIR = "$PWD\.uv-cache"
@@ -12,39 +56,21 @@ uv pip install --python .venv\Scripts\python.exe -r main\requirements.txt
 .venv\Scripts\python.exe -m unittest discover -s main -p 'test_*.py'
 ```
 
-`python main/main.py --source <bundle-or-http-url> --output <path> --evidence <path>` accepts another bundle or the organizer's inbox endpoint. Add `--submit-url <server>` (e.g. `http://localhost:8080`, or omit it when `--source` is itself an http(s) URL) to POST the generated submission straight to the server's `/submit` endpoint and print the scoreboard in one command, instead of a separate manual request. Pass `--quiet` to suppress the batch-progress log lines; each run stamps every case with a `run_id` (visible in `evidence.json`) so a specific run's cases can be told apart.
-
-TXT, XLSX, and DOCX extraction use the Python standard library. Selectable PDF text uses pypdf. Set an API key (see below) to enable AI fallback for uncertain email intent, document roles, unfamiliar labels, and image-only PDF transcription.
-
-**Two AI providers are supported**, chosen automatically by `AIService` from whichever key is set (`AI_PROVIDER=gemini` or `AI_PROVIDER=gonkarouter` forces one explicitly if you ever have both configured):
-- **Gemini** -- set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-2.5-flash`, a verified-working non-preview model).
-- **GonkaRouter** -- an API gateway routing to third-party models (MiniMax, Kimi, Zhipu, DeepSeek); set `GONKAROUTER_API_KEY` (and optionally `GONKAROUTER_MODEL`, default `deepseek-ai/DeepSeek-V4-Flash-0731`, a non-reasoning model chosen for speed and reliability on this app's short structured-JSON tasks). If this key is present, it's used instead of Gemini unless `AI_PROVIDER=gemini` is set. `ai_service.py`'s only provider-specific code is in `_json_gemini`/`_json_gonkarouter` -- every higher-level method (classification, document-role detection, field mapping, PDF vision, review explanation, correction drafting) is written once and works against either provider identically, including the anti-hallucination and confidence-threshold guardrails.
-
-**Configuring either key**: set it as a real environment variable (`$env:GEMINI_API_KEY = "..."` for the current terminal, or `setx GEMINI_API_KEY "..."` to persist across new terminals/processes), or copy `.env.example` to `.env` at the repo root and fill it in there. `.env` is gitignored and never committed. A real environment variable always takes priority over `.env` if both are set -- `.env` only fills in whatever isn't already set. Every entry point (`main.py`, `dashboard.py`, `check_gemini_live.py`) loads `.env` automatically at startup via `main/dotenv_loader.py`, a small dependency-free parser (no `python-dotenv` package needed, consistent with this project's existing habit of hand-rolling small parsers instead of adding a dependency for something simple). Run `python main/check_gemini_live.py` any time to verify whichever provider/key you've configured actually works live, without touching your real data. AI output is checked against source evidence and low-confidence extraction is sent to human review. The model never performs the final SI/BL comparison. Decisions use `NEEDS_REVIEW` plus the bundle's allowed review reasons in the submission. More specific internal reasons and source text remain in `evidence.json`.
-
-**Known limitations, stated plainly:** without a Gemini key, image-only/scanned PDFs have no local OCR fallback and correctly escalate to `unreadable` rather than being read at all. Field extraction is fundamentally line-oriented (`label: value`); it's been verified against every document format and edge case in the provided bundle (`field_f1: 1.0` against ground truth) but hasn't been tested against materially different table layouts. Each case also carries a `classification_confidence` and `classification_fallback` flag (true when nothing more specific than the generic fallback matched) purely for a reviewer to spot-check -- it never changes `submission.json`'s schema or forces escalation on its own.
-
-## Reviewer dashboard
+Set `GEMINI_API_KEY` or `GONKAROUTER_API_KEY` (as a real environment variable, or in a `.env` file copied from `.env.example`) to enable AI-assisted extraction. Then run the dashboard:
 
 ```powershell
 .venv\Scripts\python.exe main\dashboard.py
 ```
 
-Open `http://127.0.0.1:8765`. The Dashboard is the home page (served from `main/dashboard/dashboard.html`, `dashboard.js`, and `style.css`). Its clickable summary cards and quick filters narrow one master case table; opening a row takes you to its Case Detail page. The detail page keeps the seven-field SI/BL comparison, clickable mismatch evidence, human-review actions, and expandable email and attachments together. A reviewer can confirm or correct a selected value, mark two values equivalent, choose the SI and draft BL, retry extraction, confirm a mismatch, resolve a review, or **reopen** a resolved case for another look. Every reviewer decision keeps a `history` list of what was decided before it, instead of silently overwriting the prior decision -- that full audit trail lives in `review_decisions.json`. Each retry also increments the case's `retry_count`. Value changes rerun the comparison and update the case and submission. If an AI provider is configured, a background worker inside `dashboard.py` automatically gives every unresolved `NEEDS_REVIEW` case a short opinion -- an assessment, a verbatim quote of evidence as proof, and a suggested next step -- so a reviewer can open the dashboard at any time and see "AI reviewing..." while it's still working or the finished report once it's ready, with no button to click and no request to wait on. The worker only fills a gap the rules already gave up on; it never revisits a decision the rules or a reviewer already made, and its proof is rejected if it isn't a literal quote from the case's own evidence. PDF cases can still be retried with OCR/Vision. A correction email draft, optionally worded by AI, is available only after a mismatch is confirmed; the reviewer must send it separately.
-
-Retries show a `Processing` state, then the updated result. Technical failures appear as `Processing failed` with the failed step and Retry action. The competition export maps these to the schema's `NEEDS_REVIEW` status and `unreadable` reason. A scanned document that cannot be transcribed remains `Human review required` in the app. Use [main/USER_TESTING.md](main/USER_TESTING.md) to run and record a human usability session.
-
-The included `Docker/server/score_cli.py` can evaluate a local bundle when ground truth is available:
+Open `http://127.0.0.1:8765`. Score a generated `submission.json` against local ground truth with:
 
 ```powershell
 .venv\Scripts\python.exe Docker\server\score_cli.py submission.json --json
 ```
 
-The API also reports field extraction coverage, human-review rate, and processing-failure rate for the current cases. Coverage measures whether fields were found; measuring field extraction **accuracy** requires independently labeled field values. The scorer reports classification and mismatch results against its local ground truth.
+### Cloud Run deployment (public demo)
 
-## Cloud Run deployment
-
-The root `Dockerfile` builds the same web app for Cloud Run. Set up a Google Cloud project with billing, a Firestore Native database, and a Cloud Storage bucket. Install the [Google Cloud CLI](https://docs.cloud.google.com/sdk/docs/install-sdk) and run `gcloud init` to sign in and select the project. The deployer needs [Cloud Run source deployment permissions](https://docs.cloud.google.com/run/docs/deploying-source-code), including access to use the runtime service account; the build service account may also need `roles/run.builder`. Use an account with Firestore and bucket write access for seeding. Skip the database, bucket, or service account creation commands below if those resources already exist.
+The root `Dockerfile` builds the same app for Cloud Run. With a Google Cloud project and billing set up:
 
 ```powershell
 $projectId = '<PROJECT_ID>'
@@ -61,32 +87,26 @@ gcloud storage buckets add-iam-policy-binding "gs://$bucketName" --member="servi
 gcloud run deploy shipping-verifier --source . --region=$region --service-account=$serviceAccount --allow-unauthenticated --set-env-vars="GCS_BUCKET=$bucketName,GOOGLE_CLOUD_PROJECT=$projectId"
 ```
 
-`storage.objectAdmin` (not `objectViewer`) because the dashboard's upload feature writes new attachment blobs, not just reads existing ones. `--allow-unauthenticated` makes the URL a public demo: anyone with the link can view cases and perform reviewer actions (confirm, correct, upload documents) -- there is no login wall. If you want a private demo instead, use `--no-allow-unauthenticated` and see the note at the end of this section for authenticated access.
-
-For AI assistance, use either provider (see "Two AI providers are supported" above) -- create a Secret Manager secret with the key value using the [Cloud Console](https://docs.cloud.google.com/secret-manager/docs/create-secret-quickstart), then grant the runtime service account access and attach it to Cloud Run. For Gemini, get a key from [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key):
+Attach an AI key as a Secret Manager secret (write it to a file first on Windows -- piping through `echo` embeds a trailing newline that breaks every request):
 
 ```powershell
-gcloud secrets add-iam-policy-binding gemini-api-key --member="serviceAccount:$serviceAccount" --role='roles/secretmanager.secretAccessor'
-gcloud run services update shipping-verifier --region=$region --set-secrets='GEMINI_API_KEY=gemini-api-key:1'
+[System.IO.File]::WriteAllText("$PWD\key.tmp", "<YOUR_KEY>")
+gcloud secrets create gonkarouter-api-key --data-file="$PWD\key.tmp"
+Remove-Item "$PWD\key.tmp"
+gcloud secrets add-iam-policy-binding gonkarouter-api-key --member="serviceAccount:$serviceAccount" --role='roles/secretmanager.secretAccessor'
+gcloud run services update shipping-verifier --region=$region --set-secrets='GONKAROUTER_API_KEY=gonkarouter-api-key:latest'
 ```
 
-For GonkaRouter instead, create a secret (e.g. `gonkarouter-api-key`) the same way and set `GONKAROUTER_API_KEY` instead of `GEMINI_API_KEY` in the `--set-secrets` flag above.
+(Substitute `GEMINI_API_KEY`/`gemini-api-key` throughout if using Gemini instead.)
 
-Do not put the key in source control or chat. The AI service uses either the [Gemini generateContent API](https://ai.google.dev/api/generate-content) or GonkaRouter's Messages-compatible API, both with JSON output. Verify it with a synthetic email and a scanned PDF retry; a configured key alone does not prove the live calls work.
-
-Seed the case database and attachment bucket using Application Default Credentials on the upload machine:
+Seed the case database and attachment bucket:
 
 ```powershell
 $env:GOOGLE_CLOUD_PROJECT = $projectId
 $env:GCS_BUCKET = $bucketName
-$env:UV_CACHE_DIR = "$PWD\.uv-cache"
-uv pip install --python .venv\Scripts\python.exe -r main\requirements-cloud.txt
 gcloud auth application-default login
-.venv\Scripts\python.exe main\seed_cloud.py --source Bundle
+python -m pip install -r main\requirements-cloud.txt
+python main\seed_cloud.py --source Bundle
 ```
 
-Cloud Run reads case state from Firestore and original attachments from Cloud Storage. Its service account uses [Application Default Credentials](https://docs.cloud.google.com/run/docs/integrate/using-gcp-services). The deployment above is public (`--allow-unauthenticated`): the printed service URL works directly in any browser, no sign-in required, which is what a public live demo needs. The local competition bundle and generated files remain excluded from the container image and Git.
-
-If you deploy with `--no-allow-unauthenticated` instead (a private demo), use the [Cloud Run proxy](https://docs.cloud.google.com/run/docs/triggering/https-request) with an authorized account, or configure Identity-Aware Proxy for testers -- granting Invoker alone does not make a direct browser visit send credentials, so arrange the approved authenticated path before sharing that URL.
-
-For user testing, ask two or three shipping operations reviewers to work through [main/USER_TESTING.md](main/USER_TESTING.md) without coaching. Record their actual task results and comments, make changes that address observed confusion, then repeat the tasks. The template intentionally contains no invented feedback.
+`--allow-unauthenticated` makes the deployment a public demo: the printed service URL works directly in any browser, and any visitor can perform reviewer actions. Use `--no-allow-unauthenticated` instead for a private deployment gated behind the [Cloud Run proxy](https://docs.cloud.google.com/run/docs/triggering/https-request) or Identity-Aware Proxy.
